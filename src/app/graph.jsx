@@ -17,147 +17,40 @@ export default function ForceDirectedGraph() {
   //const [edges, setEdges] = useState([]); // State for storing edges
   
   const kCoreValues = {
-    1: 3,
+    1: 4,
     2: 4,
     3: 4,
     4: 4,
-    5: 5,
-    6: 4,
-    7: 5,
-    8: 4,
-    9: 2,
+    5: 4,
+    6: 3,
+    7: 3,
+    8: 3,
+    9: 3,
     10: 2,
     11: 2,
-    12: 3,
-    13: 1,
-    14: 3,
-    15: 3,
-    16: 3,
-    17: 4,
-    18: 4,
-    19: 4,
-    20: 4,
-    21: 2,
-    22: 3,
-    23: 2,
-    24: 2,
-    25: 2,
-    26: 2,
-    27: 2,
-    28: 2,
+    12: 2,
+    13: 2,
+    14: 2,
+    15: 2,
+    16: 2,
+    17: 2,
+    18: 2,
+    19: 1,
+    20: 1,
+    21: 1,
+    22: 1,
+    23: 1,
+    24: 1,
+    25: 1,
+    26: 1,
+    27: 1,
+    28: 1,
     29: 1,
-    30: 2,
-    31: 2,
-    32: 2,
-    33: 2,
-    34: 2,
-    35: 2,
-    36: 2,
-    37: 2,
-    38: 2,
-    39: 2,
-    40: 2,
-    41: 2,
-    42: 2,
-    43: 2,
-    44: 2,
-    45: 2,
-    46: 2,
-    47: 2,
-    48: 1,
-    49: 2,
-    50: 2
+    30: 1
   };
   const generateInitialData = () => {
         const edges = [
-          [1, 2], 
-          [1, 4], 
-          [1, 7], 
-          [1, 14], 
-          [1, 20], 
-          [2, 3], 
-          [2, 5], 
-          [2, 7], 
-          [2, 13], 
-          [3, 8], 
-          [3, 9], 
-          [4, 5], 
-          [4, 7], 
-          [5, 4], 
-          [5, 6], 
-          [5, 7], 
-          [6, 8], 
-          [6, 11], 
-          [6, 12], 
-          [7, 8], 
-          [8, 10], 
-          [15, 17], 
-          [16, 17], 
-          [17, 18], 
-          [17, 19], 
-          [18, 20], 
-          [19, 20], 
-          [21, 1], 
-          [21, 3], 
-          [21, 4], 
-          [22, 5], 
-          [22, 8], 
-          [23, 6], 
-          [23, 14], 
-          [24, 2], 
-          [24, 10], 
-          [25, 7], 
-          [25, 19], 
-          [26, 17], 
-          [26, 11], 
-          [27, 20], 
-          [27, 18], 
-          [28, 12], 
-          [28, 15], 
-          [29, 5], 
-          [29, 22], 
-          [30, 8], 
-          [30, 13], 
-          [31, 3], 
-          [31, 10], 
-          [32, 9], 
-          [32, 18], 
-          [33, 16], 
-          [33, 19], 
-          [34, 4], 
-          [34, 12], 
-          [35, 1], 
-          [35, 15], 
-          [36, 7], 
-          [36, 2], 
-          [37, 20], 
-          [37, 6], 
-          [38, 17], 
-          [38, 5], 
-          [39, 14], 
-          [39, 11], 
-          [40, 3], 
-          [40, 22], 
-          [41, 4], 
-          [41, 8], 
-          [42, 19], 
-          [42, 12], 
-          [43, 1], 
-          [43, 26], 
-          [44, 7], 
-          [44, 21], 
-          [45, 8], 
-          [45, 18], 
-          [46, 2], 
-          [46, 5], 
-          [47, 10], 
-          [47, 12], 
-          [48, 3], 
-          [48, 29], 
-          [49, 14], 
-          [49, 20], 
-          [50, 6], 
-          [50, 15]
+          [1,5], [1,2], [1,3], [1,4], [2,3], [2,4], [2,5], [3,4], [3,5], [4,5], [6,7], [6,8], [6,9], [7,8], [7,9], [8,9], [1,9], [1,11], [2,11], [2,12], [3,12], [3,13], [4,16], [5,9], [5,14], [5,15], [5,15], [6,10], [8,15], [9,10], [10,11], [12,13], [14,15], [16,17], [16,18], [17,18], [7,23], [10,24], [10,25], [11,26], [11,27], [12,28], [12,29], [13,30], [17,20], [18,19], [15,21], [15,22]
         ];
     
         // Generate unique nodes from edges
@@ -193,10 +86,7 @@ export default function ForceDirectedGraph() {
         const links = edges.map(([source, target]) => ({
             source: String(source), // Ensure source is a string
             target: String(target), // Ensure target is a string
-            value:  Math.min(Math.min(
-              kCoreValues[String(source)] || 0, 
-              kCoreValues[String(target)] || 0
-          ),10)// Thickness based on average k-core value
+            value:  1// Thickness based on average k-core value
         }));
     
         // Final data structure
@@ -265,7 +155,8 @@ export default function ForceDirectedGraph() {
         .call(d3.drag()
           .on("start", dragstarted)
           .on("drag", dragged)
-          .on("end", dragended));
+          //.on("end", dragended)
+          );
       node.append("title")
         .text(d => d.id);
   
@@ -317,6 +208,22 @@ export default function ForceDirectedGraph() {
           alert(`Node ${nodeId} does not exist!`);
       }
   };
+    const deleteEdge = (sourceId, targetId) => {
+      const edgeExists = links.some(link => 
+        (link.source === sourceId && link.target === targetId) || 
+        (link.source === targetId && link.target === sourceId)
+      );
+    
+      if (edgeExists) {
+        setLinks(links.filter(link => 
+          !((link.source === sourceId && link.target === targetId) || 
+            (link.source === targetId && link.target === sourceId))
+        ));
+      } else {
+        alert(`Edge between ${sourceId} and ${targetId} does not exist!`);
+      }
+    };
+
     const addEdge = () => {
       const source = edgeSource.trim();
       const target = edgeTarget.trim();
@@ -367,47 +274,78 @@ export default function ForceDirectedGraph() {
     });
     };
 
+    // Function to remove all SVG elements
+    const clearSvg = () => {
+      d3.select(svgRef.current).selectAll("*").remove();
+    };
+
   
   return (
     <div>
       <div className="flex flex-col mb-4">
-        <div className="flex flex-row mb-2">
-          <div className="mr-2">
-              <Label htmlFor="edgeSource" className="ml-1">Source Node:</Label>
+        <div className="flex flex-col mb-2">
+          <div className="flex flex-row mb-2">
+            <div className="mr-2">
+                <Label htmlFor="edgeSource" className="ml-1">Source Node:</Label>
+                <Input
+                    id="edgeSource"
+                    type="text"
+                    placeholder="Source node"
+                    value={edgeSource}
+                    style={{ width: '100%' }} // Set width to 100% for better responsiveness
+                    onChange={e => setEdgeSource(e.target.value)}
+                />
+            </div>
+            <div className="mr-2">
+                <Label htmlFor="edgeTarget" className="ml-1">Edge Target:</Label>
+                <Input
+                    id="edgeTarget"
+                    type="text"
+                    placeholder="Target node"
+                    value={edgeTarget}
+                    style={{ width: '100%' }} // Set width to 100%
+                    onChange={e => setEdgeTarget(e.target.value)}
+                />
+            </div>
+            <div className="flex pt-4">
+                <Button 
+                    onClick={() => addEdge(edgeSource, edgeTarget)} 
+                    className="mt-2"
+                >
+                    Add Edge
+                </Button>
+            </div>
+          </div>
+          <div className="flex flex-row mb-2">
+            <div className="flex mr-2"> 
               <Input
-                  id="edgeSource"
-                  type="text"
-                  placeholder="Source node"
-                  value={edgeSource}
-                  style={{ width: '100%' }} // Set width to 100% for better responsiveness
-                  onChange={e => setEdgeSource(e.target.value)}
+                id="deleteEdgeSource"
+                type="text"
+                placeholder="Source Node ID"
+                value={edgeSource}
+                onChange={e => setEdgeSource(e.target.value)}
               />
-          </div>
-          <div className="mr-2">
-              <Label htmlFor="edgeTarget" className="ml-1">Edge Target:</Label>
+            </div>
+            <div className="flex mr-2">
               <Input
-                  id="edgeTarget"
-                  type="text"
-                  placeholder="Target node"
-                  value={edgeTarget}
-                  style={{ width: '100%' }} // Set width to 100%
-                  onChange={e => setEdgeTarget(e.target.value)}
+                id="deleteEdgeTarget"
+                type="text"
+                placeholder="Target Node ID"
+                value={edgeTarget}
+                onChange={e => setEdgeTarget(e.target.value)}
               />
+            </div>
+            <div className="flex">
+              <Button onClick={() => deleteEdge(edgeSource, edgeTarget)}>Delete Edge</Button>
+            </div>
           </div>
-          <div className="flex pt-4">
-              <Button 
-                  onClick={() => addEdge(edgeSource, edgeTarget)} 
-                  className="mt-2"
-              >
-                  Add Edge
-              </Button>
-          </div>
+
         </div>
         <div className="flex flex-col">
           <div className="flex mr-2 mb-2">
           <Label htmlFor="deleteNodeId">Delete Node:</Label>
           </div>
-          <div className="flex-row mb-2">
+          <div className="flex flex-row mb-2">
                 <Input
                   id="deleteNodeId"
                   type="text"
@@ -417,7 +355,7 @@ export default function ForceDirectedGraph() {
                   style={{ width: '30%' }} // Set width to 50%
                   className="mr-2" // Keep any additional styles
                 />
-                <Button onClick={() => deleteNode(deleteNodeId)}>Delete</Button>
+                <Button onClick={() => deleteNode(deleteNodeId)}>Delete Node</Button>
           </div>  
         </div>
     </div>
@@ -438,6 +376,9 @@ export default function ForceDirectedGraph() {
         className="mt-3"
         onClick={addEdgesFromInput}
         >Upload Edge List</Button>
+        <Button onClick={clearSvg} className="mt-2">
+            Clear SVG
+        </Button>
     </div>
     </div>
     </div>
