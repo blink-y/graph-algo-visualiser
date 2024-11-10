@@ -10,7 +10,7 @@ import {
 
 const Menu = () => {
     <Menubar>
-  <MenubarMenu>
+    <MenubarMenu>
     <MenubarTrigger>File</MenubarTrigger>
     <MenubarContent>
       <MenubarItem>

@@ -26,7 +26,7 @@ def run_all_kcores(edges):
 
     core_nodes = {}
     
-    while len(k_core_edges) != 0:
+    while len(k_core_edges) > 0:
         k_core = get_kcore(G, k)
         
         k_core_edges = k_core.edges()

@@ -1,11 +1,11 @@
+"use-client";
+
 import * as d3 from "d3";
 import React, { useState, useEffect, useRef } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Slider } from "@/components/ui/slider";
 import { Textarea } from "@/components/ui/textarea"
-
 export default function ForceDirectedGraph() {
   const svgRef = useRef();
   const [nodes, setNodes] = useState([]);
@@ -48,51 +48,130 @@ export default function ForceDirectedGraph() {
     29: 1,
     30: 1
   };
-  const generateInitialData = () => {
-        const edges = [
-          [1,5], [1,2], [1,3], [1,4], [2,3], [2,4], [2,5], [3,4], [3,5], [4,5], [6,7], [6,8], [6,9], [7,8], [7,9], [8,9], [1,9], [1,11], [2,11], [2,12], [3,12], [3,13], [4,16], [5,9], [5,14], [5,15], [5,15], [6,10], [8,15], [9,10], [10,11], [12,13], [14,15], [16,17], [16,18], [17,18], [7,23], [10,24], [10,25], [11,26], [11,27], [12,28], [12,29], [13,30], [17,20], [18,19], [15,21], [15,22]
-        ];
-    
-        // Generate unique nodes from edges
-        const nodesSet = new Set();
-        edges.forEach(edge => {
-            nodesSet.add(edge[0]);
-            nodesSet.add(edge[1]);
+  const edges = [
+    [1,5], [1,2], [1,3], [1,4], [2,3], [2,4], [2,5], [3,4], [3,5], [4,5], [6,7], [6,8], [6,9], [7,8], [7,9], [8,9], [1,9], [1,11], [2,11], [2,12], [3,12], [3,13], [4,16], [5,9], [5,14], [5,15], [5,15], [6,10], [8,15], [9,10], [10,11], [12,13], [14,15], [16,17], [16,18], [17,18], [7,23], [10,24], [10,25], [11,26], [11,27], [12,28], [12,29], [13,30], [17,20], [18,19], [15,21], [15,22]
+  ];
+
+  const postGraphData = async () => {
+    try {
+        const response = await fetch('http://localhost:8000/calculate_k_cores', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                edges: edges.map(edge => [
+                    Number(edge[0]), // Ensure these are numbers
+                    Number(edge[1])  // Ensure these are numbers
+                ])
+            })
         });
 
-        // Define color mapping based on k-core value
-        // Define color mapping based on k-core value
-        const colors = ['#FFCCCC', '#FF99CC', '#FF66CC', '#FF33CC', '#FF00CC']; // Example color array
+        if (!response.ok) {
+            throw new Error(`Failed to post graph data: ${response.status}`);
+        }
 
-        const getColorForKCoreValue = (kCoreValue) => {
-            if (kCoreValue < 0 || kCoreValue >= colors.length) {
-                console.warn(`Invalid k-core value: ${kCoreValue}. Defaulting to white.`);
-                return '#FFFFFF'; // Fallback color
-            }
-            return colors[kCoreValue];
-        };
+        const data = await response.json(); // Handle the response
+        const kcore_nodes = data.core_nodes;
+        alert('Graph data posted successfully!');
+        console.log('Core nodes:', data.core_nodes); // Log core nodes
+        return kcore_nodes;
+        
 
-      // Create nodes array with colors and groups based on k-core values
-      const nodes = Array.from(nodesSet).map(id => {
-          const kCoreValue = kCoreValues[id] || 0; // Default k-core value to 0 if not found
-          return {
-              id: String(id),
-              group: String.fromCharCode(65 + Math.min(kCoreValue, 4)), // Group A-E based on k-core values
-              color: getColorForKCoreValue(kCoreValue) // Assign color based on k-core value
-            };
+    } catch (error) {
+        console.error('Failed to post graph data:', error);
+        alert('Failed to post graph data. See console for details.');
+    }
+  };
+
+  const generateInitialData = async() => {
+
+    const postGraphData = async () => {
+      try {
+          const response = await fetch('http://localhost:8000/calculate_k_cores', {
+              method: 'POST',
+              headers: {
+                  'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({
+                  edges: edges.map(edge => [
+                      Number(edge[0]), // Ensure these are numbers
+                      Number(edge[1])  // Ensure these are numbers
+                  ])
+              })
           });
-    
-        // Create links array with random values
-        const links = edges.map(([source, target]) => ({
-            source: String(source), // Ensure source is a string
-            target: String(target), // Ensure target is a string
-            value:  1// Thickness based on average k-core value
-        }));
-    
-        // Final data structure
-        setNodes(nodes);
-        setLinks(links);
+  
+          if (!response.ok) {
+              throw new Error(`Failed to post graph data: ${response.status}`);
+          }
+  
+          const data = await response.json(); // Handle the response
+          console.log('Core nodes:', data.core_nodes); // Log core nodes
+          return data.core_nodes;
+        
+          
+  
+      } catch (error) {
+          console.error('Failed to post graph data:', error);
+          alert('Failed to post graph data. See console for details.');
+      }
     };
+    
+    const kcore_nodes = await postGraphData();
+    console.log('Core nodes:', kcore_nodes); // Log core nodes
+    if (!kcore_nodes) {
+        console.error('No core nodes data available. Cannot generate initial data.');
+        return; // Exit if there was an error
+    }
+
+    // Create a Map to track the highest k-core value for each node
+    const nodeCoreMap = new Map();
+
+    // Iterate through the k-core nodes
+    Object.entries(kcore_nodes).forEach(([kCoreValue, nodeIds]) => {
+        const numericKCoreValue = Number(kCoreValue);
+        nodeIds.forEach(id => {
+            // If the node is not in the map or if the current k-core value is higher, update it
+            if (!nodeCoreMap.has(id) || nodeCoreMap.get(id) < numericKCoreValue) {
+                nodeCoreMap.set(id, numericKCoreValue);
+            }
+        });
+    });
+
+    const colorMapping = {
+      1: '#FFCCCC',
+      2: '#FF99CC',
+      3: '#FF66CC',
+      4: '#FF33CC',
+      5: '#FF00CC'
+  };
+
+  const getColorForKCoreValue = (kCoreValue) => {
+      return colorMapping[kCoreValue] || '#FFFFFF'; // Fallback to white if the k-core value is not defined
+  };
+    // Create an array of unique nodes based on the highest k-core value
+    const nodes = [];
+    nodeCoreMap.forEach((kCoreValue, id) => {
+        const node = {
+            id: String(id),
+            group: String.fromCharCode(65 + Math.min(kCoreValue, 4)), // Group A-E, adjust as necessary
+            color: getColorForKCoreValue(kCoreValue) // Assign color based on k-core value
+        };
+        nodes.push(node);
+    });
+
+    // Create links array based on edges
+    const links = edges.map(([source, target]) => ({
+        source: String(source), // Ensure source is a string
+        target: String(target), // Ensure target is a string
+        value: 1 // Thickness can be adjusted based on your logic
+    }));
+
+    // Final data structure
+    setNodes(nodes);
+    setLinks(links);
+};
+
 
     useEffect(() => {
         generateInitialData();
@@ -155,7 +234,7 @@ export default function ForceDirectedGraph() {
         .call(d3.drag()
           .on("start", dragstarted)
           .on("drag", dragged)
-          //.on("end", dragended)
+          .on("end", dragended)
           );
       node.append("title")
         .text(d => d.id);
@@ -379,6 +458,11 @@ export default function ForceDirectedGraph() {
         <Button onClick={clearSvg} className="mt-2">
             Clear SVG
         </Button>
+        <Button onClick={postGraphData} className="mt-2">
+            Submit Graph Data
+        </Button>
+    </div>
+    <div className="flex-1">
     </div>
     </div>
     </div>
