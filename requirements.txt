@@ -1,0 +1,5 @@
+networkx
+fastap
+uvicorn
+matplotlib
+pydantic
