@@ -1,5 +1,6 @@
 import networkx as nx
 import matplotlib.pyplot as plt
+from networkx.algorithms.community import k_clique_communities
 
 def generate_graph(edges):
     G = nx.Graph()
@@ -85,6 +86,25 @@ def run_all_kcores(edges):
 
     return final_core_nodes
 
+def get_kclique(edges):
+    G = generate_graph(edges)
+    
+    clique_nodes = {}
+    k = 2    
+
+    while True:
+        c = list(k_clique_communities(G, k))
+        if not c:  # Check if c is empty
+            break
+            
+        # Convert frozenset to list
+        k_clique_nodes = list(c[0])
+        k_clique_nodes.sort()  # Sort the list if needed
+        
+        clique_nodes[k] = k_clique_nodes
+        k += 1
+        
+    return clique_nodes
 
 def main():
     edges = [
@@ -96,6 +116,10 @@ def main():
     
     core_nodes = run_all_kcores(edges)
     print(core_nodes)
+    
+    clique_nodes = get_kclique(edges)
+    print(clique_nodes)
+    
     return core_nodes
 
 if __name__ == '__main__':
