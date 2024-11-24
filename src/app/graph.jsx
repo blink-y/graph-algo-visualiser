@@ -8,116 +8,46 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea"
 export default function ForceDirectedGraph() {
   const svgRef = useRef();
-  const [nodes, setNodes] = useState([]);
-  const [links, setLinks] = useState([]);
+  const [initialNodes, setInitialNodes] = useState([]);
+  const [initialLinks, setInitialLinks] = useState([]);
+  const [uploadedNodes, setUploadedNodes] = useState([]);
+  const [uploadedLinks, setUploadedLinks] = useState([]);
   const [edgeSource, setEdgeSource] = useState("");
   const [edgeTarget, setEdgeTarget] = useState("");
   const [deleteNodeId, setDeleteNodeId] = useState("");
-  const [edgeList, setEdgeList] = useState(''); // State for the textarea input
-  //const [edges, setEdges] = useState([]); // State for storing edges
+  const [edgeList, setEdgeList] = useState('');
+  const [kCoreValues, setKCoreValues] = useState({});
   
-  const kCoreValues = {
-    1: 4,
-    2: 4,
-    3: 4,
-    4: 4,
-    5: 4,
-    6: 3,
-    7: 3,
-    8: 3,
-    9: 3,
-    10: 2,
-    11: 2,
-    12: 2,
-    13: 2,
-    14: 2,
-    15: 2,
-    16: 2,
-    17: 2,
-    18: 2,
-    19: 1,
-    20: 1,
-    21: 1,
-    22: 1,
-    23: 1,
-    24: 1,
-    25: 1,
-    26: 1,
-    27: 1,
-    28: 1,
-    29: 1,
-    30: 1
-  };
   const edges = [
     [1,5], [1,2], [1,3], [1,4], [2,3], [2,4], [2,5], [3,4], [3,5], [4,5], [6,7], [6,8], [6,9], [7,8], [7,9], [8,9], [1,9], [1,11], [2,11], [2,12], [3,12], [3,13], [4,16], [5,9], [5,14], [5,15], [5,15], [6,10], [8,15], [9,10], [10,11], [12,13], [14,15], [16,17], [16,18], [17,18], [7,23], [10,24], [10,25], [11,26], [11,27], [12,28], [12,29], [13,30], [17,20], [18,19], [15,21], [15,22]
   ];
 
-  // const postGraphData = async () => {
-  //   try {
-  //       const response = await fetch('http://localhost:8000/calculate_k_cores', {
-  //           method: 'POST',
-  //           headers: {
-  //               'Content-Type': 'application/json'
-  //           },
-  //           body: JSON.stringify({
-  //               edges: edges.map(edge => [
-  //                   Number(edge[0]), // Ensure these are numbers
-  //                   Number(edge[1])  // Ensure these are numbers
-  //               ])
-  //           })
-  //       });
+  const postGraphData = async (edges) => {
+    try {
+      const response = await fetch('http://localhost:8000/calculate_k_cores', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ edges: edges.map(edge => [Number(edge[0]), Number(edge[1])]) })
+      });
 
-  //       if (!response.ok) {
-  //           throw new Error(`Failed to post graph data: ${response.status}`);
-  //       }
+      if (!response.ok) {
+        throw new Error(`Failed to post graph data: ${response.status}`);
+      }
 
-  //       const data = await response.json(); // Handle the response
-  //       const kcore_nodes = data.core_nodes;
-  //       alert('Graph data posted successfully!');
-  //       console.log('Core nodes:', data.core_nodes); // Log core nodes
-  //       return kcore_nodes;
-        
+      const data = await response.json();
+      console.log('Core nodes:', data.core_nodes);
+      return data.core_nodes;
 
-  //   } catch (error) {
-  //       console.error('Failed to post graph data:', error);
-  //       alert('Failed to post graph data. See console for details.');
-  //   }
-  // };
+    } catch (error) {
+      console.error('Failed to post graph data:', error);
+      alert('Failed to post graph data. See console for details.');
+    }
+  };
 
   const generateInitialData = async() => {
-
-    const postGraphData = async () => {
-      try {
-          const response = await fetch('http://localhost:8000/calculate_k_cores', {
-              method: 'POST',
-              headers: {
-                  'Content-Type': 'application/json'
-              },
-              body: JSON.stringify({
-                  edges: edges.map(edge => [
-                      Number(edge[0]), // Ensure these are numbers
-                      Number(edge[1])  // Ensure these are numbers
-                  ])
-              })
-          });
-  
-          if (!response.ok) {
-              throw new Error(`Failed to post graph data: ${response.status}`);
-          }
-  
-          const data = await response.json(); // Handle the response
-          console.log('Core nodes:', data.core_nodes); // Log core nodes
-          return data.core_nodes;
-        
-          
-  
-      } catch (error) {
-          console.error('Failed to post graph data:', error);
-          alert('Failed to post graph data. See console for details.');
-      }
-    };
-    
-    const kcore_nodes = await postGraphData();
+    const kcore_nodes = await postGraphData(edges);
     console.log('Core nodes:', kcore_nodes); // Log core nodes
     if (!kcore_nodes) {
         console.error('No core nodes data available. Cannot generate initial data.');
@@ -168,125 +98,150 @@ export default function ForceDirectedGraph() {
     }));
 
     // Final data structure
-    setNodes(nodes);
-    setLinks(links);
+    setInitialNodes(nodes);
+    setInitialLinks(links);
 };
 
-
-    useEffect(() => {
-        generateInitialData();
-    }, []);
-  
-    useEffect(() => {
-      // Specify the dimensions of the chart.
-      
-      const width = window.innerWidth*0.4;
-      const height = window.innerHeight*0.4;
-  
-      // Specify the color scale.
-      const color = d3.scaleOrdinal(d3.schemeCategory10);
-  
-  
-      // Create a simulation with several forces.
-      const simulation = d3.forceSimulation(nodes)
-          .force("link", d3.forceLink(links)
-              .id(d => d.id)
-              .strength(link => {
-                  const sourceCore = kCoreValues[link.source] || 0; // Get the k-core value of the source
-                  const targetCore = kCoreValues[link.target] || 0; // Get the k-core value of the target
-                  // Increase link strength based on the average k-core value
-                  return 1 + 0.5 * Math.min(sourceCore, targetCore); // Higher k-core values increase the strength
-              }))
-          .force("charge", d3.forceManyBody().strength(node => {
-              const coreValue = kCoreValues[node.id] || 0; // Get the k-core value of the node
-              return -15 * (5 + coreValue); // Repel higher k-core values more strongly
-          }))
-
+  const handleFileUpload = async (event) => {
+    const file = event.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        const content = e.target.result;
+        const edges = parseGraphData(content);
         
-        // Create the SVG container and set dimensions.
-        const svg = d3.select(svgRef.current)
-        .attr("width", width)
-        .attr("height", height)
-        .attr("viewBox", [-width / 2, -height / 2, width, height])
-        .attr("style", "max-width: auto; height: auto;")
-        .attr("class","responsive-svg");
-        
-      // Remove all existing elements in the SVG container.
-      svg.selectAll("*").remove()
-      
-      // Add lines for links and circles for nodes.
-      const link = svg.append("g")
-        .attr("stroke", "#999")
-        .attr("stroke-opacity", 1)
-        .selectAll("line")
-        .data(links)
-        .join("line")
-        .attr("stroke-width", d => Math.sqrt(d.value));
-  
-      const node = svg.append("g")
-        .attr("stroke", "#fff")
-        .attr("stroke-width", 1.5)
-        .selectAll("circle")
-        .data(nodes)
-        .join("circle")
-        .attr("r", 5)
-        .attr("fill", d => color(d.group))
-        .call(d3.drag()
-          .on("start", dragstarted)
-          .on("drag", dragged)
-          .on("end", dragended)
-          );
-      node.append("title")
-        .text(d => d.id);
-  
-      // Set the position attributes of links and nodes each time the simulation ticks.
-      simulation.on("tick", () => {
-        link
-          .attr("x1", d => d.source.x)
-          .attr("y1", d => d.source.y)
-          .attr("x2", d => d.target.x)
-          .attr("y2", d => d.target.y);
-  
-        node
-          .attr("cx", d => d.x)
-          .attr("cy", d => d.y);
-      });
-  
-      // Reheat the simulation when drag starts, and fix the subject position.
-      function dragstarted(event) {
-        if (!event.active) simulation.alphaTarget(0.3).restart();
-        event.subject.fx = event.subject.x;
-        event.subject.fy = event.subject.y;
-      }
-  
-      // Update the subject (dragged node) position during drag.
-      function dragged(event) {
-        event.subject.fx = event.x;
-        event.subject.fy = event.y;
-      }
-  
-      //Restore the target alpha and unfix the subject position after dragging ends.
-      function dragended(event) {
-        if (!event.active) simulation.alphaTarget(0);
-        event.subject.fx = null;
-        event.subject.fy = null;
-      }
-  
-      // Cleanup function to stop the simulation when the component unmounts or updates.
-      return () => {
-        simulation.stop();
+        // Send the uploaded graph data to the backend
+        const kCoreData = await postGraphData(edges);
+        if (kCoreData) {
+          // If successful, update the uploaded graph state
+          // Optionally, you can create nodes and links if needed for rendering
+          const nodesSet = new Set();
+          edges.forEach(([source, target]) => {
+            nodesSet.add(source);
+            nodesSet.add(target);
+          });
+          const nodes = Array.from(nodesSet).map(id => ({ id, group: "A" })); // Assign a default group
+          setUploadedNodes(nodes);
+          setUploadedLinks(edges.map(([source, target]) => ({ source, target, value: 1 }))); // Convert to links for rendering
+        }
       };
-    }, [nodes, links]);
-
-    const deleteNode = (nodeId) => {
-      if (nodes.find(node => node.id === nodeId)) {
-          setNodes(nodes.filter(node => node.id !== nodeId));
-          setLinks(links.filter(link => link.source.id !== nodeId && link.target.id !== nodeId));
-          setDeleteNodeId(""); // Clear input after deletion
-      } else {
-          alert(`Node ${nodeId} does not exist!`);
-      }
+      reader.readAsText(file);
+    }
   };
+
+  const parseGraphData = (data) => {
+    const edgeLines = data.split('\n').filter(line => line.trim() !== '');
+    const edges = edgeLines.map(line => {
+      const [source, target] = line.split(',').map(node => node.trim());
+      return [Number(source), Number(target)]; // Convert to numbers and return as an array
+    });
+    return edges;
+  };
+
+
+  useEffect(() => {
+    generateInitialData();
+  }, []);
+
+  useEffect(() => {
+    // Specify the dimensions of the chart.
+    const width = window.innerWidth * 0.4;
+    const height = window.innerHeight * 0.4;
+  
+    // Specify the color scale.
+    const color = d3.scaleOrdinal(d3.schemeCategory10);
+  
+    // Create a simulation with several forces.
+    const simulation = d3.forceSimulation((uploadedNodes.length > 0 ? uploadedNodes : initialNodes))
+      .force("link", d3.forceLink((uploadedLinks.length > 0 ? uploadedLinks : initialLinks))
+        .id(d => d.id)
+        .strength(link => {
+          const sourceCore = kCoreValues[link.source] || 0; // Get the k-core value of the source
+          const targetCore = kCoreValues[link.target] || 0; // Get the k-core value of the target
+          return 1 + 0.5 * Math.min(sourceCore, targetCore); // Strength based on k-core values
+        }))
+      .force("charge", d3.forceManyBody().strength(node => {
+        const coreValue = kCoreValues[node.id] || 0; // Get the k-core value of the node
+        return -15 * (5 + coreValue); // Repel higher k-core values more strongly
+      }))
+      .force("center", d3.forceCenter(0, 0)); // Center the graph
+  
+    // Create the SVG container and set dimensions.
+    const svg = d3.select(svgRef.current)
+      .attr("width", width)
+      .attr("height", height)
+      .attr("viewBox", [-width / 2, -height / 2, width, height])
+      .attr("style", "max-width: auto; height: auto;")
+      .attr("class", "responsive-svg");
+  
+    // Remove all existing elements in the SVG container.
+    svg.selectAll("*").remove();
+  
+    // Add lines for links and circles for nodes.
+    const link = svg.append("g")
+      .attr("stroke", "#999")
+      .attr("stroke-opacity", 1)
+      .selectAll("line")
+      .data(uploadedLinks.length > 0 ? uploadedLinks : initialLinks)
+      .join("line")
+      .attr("stroke-width", d => Math.sqrt(d.value));
+  
+    const node = svg.append("g")
+      .attr("stroke", "#fff")
+      .attr("stroke-width", 1.5)
+      .selectAll("circle")
+      .data(uploadedNodes.length > 0 ? uploadedNodes : initialNodes)
+      .join("circle")
+      .attr("r", 5)
+      .attr("fill", d => color(d.group))
+      .call(d3.drag()
+        .on("start", dragstarted)
+        .on("drag", dragged)
+        .on("end", dragended)
+      );
+  
+    node.append("title")
+      .text(d => d.id);
+  
+    // Set the position attributes of links and nodes each time the simulation ticks.
+    simulation.on("tick", () => {
+      link
+        .attr("x1", d => d.source.x)
+        .attr("y1", d => d.source.y)
+        .attr("x2", d => d.target.x)
+        .attr("y2", d => d.target.y);
+  
+      node
+        .attr("cx", d => d.x)
+        .attr("cy", d => d.y);
+    });
+  
+    // Drag functions
+    function dragstarted(event) {
+      if (!event.active) simulation.alphaTarget(0.3).restart();
+      event.subject.fx = event.subject.x;
+      event.subject.fy = event.subject.y;
+    }
+  
+    function dragged(event) {
+      event.subject.fx = event.x;
+      event.subject.fy = event.y;
+    }
+  
+    function dragended(event) {
+      if (!event.active) simulation.alphaTarget(0);
+      event.subject.fx = null;
+      event.subject.fy = null;
+    }
+  
+    // Cleanup function to stop the simulation when the component unmounts or updates.
+    return () => {
+      simulation.stop();
+    };
+  }, [initialNodes, initialLinks, uploadedNodes, uploadedLinks]);
+
+
+
     const deleteEdge = (sourceId, targetId) => {
       const edgeExists = links.some(link => 
         (link.source === sourceId && link.target === targetId) || 
@@ -396,27 +351,6 @@ export default function ForceDirectedGraph() {
             </div>
           </div>
           <div className="flex flex-row mb-2">
-            <div className="flex mr-2"> 
-              <Input
-                id="deleteEdgeSource"
-                type="text"
-                placeholder="Source Node ID"
-                value={edgeSource}
-                onChange={e => setEdgeSource(e.target.value)}
-              />
-            </div>
-            <div className="flex mr-2">
-              <Input
-                id="deleteEdgeTarget"
-                type="text"
-                placeholder="Target Node ID"
-                value={edgeTarget}
-                onChange={e => setEdgeTarget(e.target.value)}
-              />
-            </div>
-            <div className="flex">
-              <Button onClick={() => deleteEdge(edgeSource, edgeTarget)}>Delete Edge</Button>
-            </div>
           </div>
 
         </div>
@@ -458,9 +392,13 @@ export default function ForceDirectedGraph() {
         <Button onClick={clearSvg} className="mt-2">
             Clear SVG
         </Button>
-        <Button onClick={postGraphData} className="mt-2">
-            Submit Graph Data
-        </Button>
+        <div>
+        <input
+          type="file"
+          accept=".txt" // or the appropriate file types
+          onChange={handleFileUpload}
+        />
+        </div>
     </div>
     <div className="flex-1">
     </div>
