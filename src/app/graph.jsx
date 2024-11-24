@@ -36,8 +36,8 @@ export default function ForceDirectedGraph() {
       }
 
       const data = await response.json();
-      console.log('Core nodes:', data.core_nodes);
-      return data.core_nodes;
+      console.log('Core nodes:', data.core_data);
+      return data.core_data;
 
     } catch (error) {
       console.error('Failed to post graph data:', error);
@@ -144,21 +144,41 @@ export default function ForceDirectedGraph() {
       reader.onload = async (e) => {
         const content = e.target.result;
         const edges = parseGraphData(content);
+        console.log('Parsed edges:', edges);
         
         // Send the uploaded graph data to the backend
         const kCoreData = await postGraphData(edges);
+        console.log('UploadedDataReturn:', kCoreData);
         if (kCoreData) {
           // If successful, update the uploaded graph state
-          // Optionally, you can create nodes and links if needed for rendering
           const nodesSet = new Set();
-          edges.forEach(([source, target]) => {
-            nodesSet.add(source);
-            nodesSet.add(target);
+          const edges = [];
+
+          // Process the k-core data in descending order of k-core values
+          const sortedKeys = Object.keys(kCoreData).sort((a, b) => b - a);
+
+          sortedKeys.forEach(key => {
+              const { nodes, edges: edgeList } = kCoreData[key];
+
+              // Add nodes to the set
+              nodes.forEach(node => nodesSet.add(node));
+
+              // Add edges to the edges array
+              edgeList.forEach(([source, target]) => {
+                  edges.push([source, target]);
+              });
           });
-          const nodes = Array.from(nodesSet).map(id => ({ id, group: "A" })); // Assign a default group
+
+          // Convert the Set to an array for unique nodes
+          const nodes = Array.from(nodesSet).map(id => ({ id: String(id), group: "A" })); // Assign a default group
+
+          // Convert edges for rendering
+          const formattedEdges = edges.map(([source, target]) => ({ source: String(source), target: String(target), value: 1 }));
+
+          // Update state
           setUploadedNodes(nodes);
-          setUploadedLinks(edges.map(([source, target]) => ({ source, target, value: 1 }))); // Convert to links for rendering
-        }
+          setUploadedLinks(formattedEdges);
+      }
       };
       reader.readAsText(file);
     }
