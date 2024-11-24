@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea"
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 export default function ForceDirectedGraph() {
   const svgRef = useRef();
   const [initialNodes, setInitialNodes] = useState([]);
@@ -17,8 +18,9 @@ export default function ForceDirectedGraph() {
   const [deleteNodeId, setDeleteNodeId] = useState("");
   const [edgeList, setEdgeList] = useState('');
   const [kCoreValues, setKCoreValues] = useState({});
+  const [selectedValue, setSelectedValue] = useState('1');
 
-  // Uploaded Graph data
+  // Upload Graph data
   const postGraphData = async (edges) => {
     try {
       const response = await fetch('http://localhost:8000/calculate_k_cores', {
@@ -59,8 +61,8 @@ export default function ForceDirectedGraph() {
       }
   
       const data = await response.json();
-      console.log('Core nodes:', data.core_nodes);
-      return data.core_nodes;
+      console.log('Core nodes:', data.core_data);
+      return data.core_data;
   
     } catch (error) {
       console.error('Failed to post graph data:', error);
@@ -68,10 +70,10 @@ export default function ForceDirectedGraph() {
     }
   };
 
-  const generateInitialData = async() => {
-    const kcore_nodes = await initialGraphData('1');
-    console.log('Core nodes:', kcore_nodes); // Log core nodes
-    if (!kcore_nodes) {
+  const generateInitialGraph = async (value) => {
+    const data = await initialGraphData(value);
+    console.log('Nodes', data); // Log core nodes
+    if (!data) {
         console.error('No core nodes data available. Cannot generate initial data.');
         return; // Exit if there was an error
     }
@@ -79,8 +81,11 @@ export default function ForceDirectedGraph() {
     // Create a Map to track the highest k-core value for each node
     const nodeCoreMap = new Map();
 
-    // Iterate through the k-core nodes
-    Object.entries(kcore_nodes).forEach(([kCoreValue, nodeIds]) => {
+    // Sort the k-core entries by key (k-core value) in descending order
+    const sortedKCoreEntries = Object.entries(data).sort(([a], [b]) => b - a);
+
+    // Iterate through the sorted k-core nodes
+    sortedKCoreEntries.forEach(([kCoreValue, { nodes: nodeIds, edges }]) => {
         const numericKCoreValue = Number(kCoreValue);
         nodeIds.forEach(id => {
             // If the node is not in the map or if the current k-core value is higher, update it
@@ -88,19 +93,22 @@ export default function ForceDirectedGraph() {
                 nodeCoreMap.set(id, numericKCoreValue);
             }
         });
+
+        // You can optionally collect edges here if needed
     });
 
     const colorMapping = {
-      1: '#FFCCCC',
-      2: '#FF99CC',
-      3: '#FF66CC',
-      4: '#FF33CC',
-      5: '#FF00CC'
-  };
+        1: '#FFCCCC',
+        2: '#FF99CC',
+        3: '#FF66CC',
+        4: '#FF33CC',
+        5: '#FF00CC'
+    };
 
-  const getColorForKCoreValue = (kCoreValue) => {
-      return colorMapping[kCoreValue] || '#FFFFFF'; // Fallback to white if the k-core value is not defined
-  };
+    const getColorForKCoreValue = (kCoreValue) => {
+        return colorMapping[kCoreValue] || '#FFFFFF'; // Fallback to white if the k-core value is not defined
+    };
+
     // Create an array of unique nodes based on the highest k-core value
     const nodes = [];
     nodeCoreMap.forEach((kCoreValue, id) => {
@@ -112,12 +120,17 @@ export default function ForceDirectedGraph() {
         nodes.push(node);
     });
 
-    // Create links array based on edges
-    const links = edges.map(([source, target]) => ({
-        source: String(source), // Ensure source is a string
-        target: String(target), // Ensure target is a string
-        value: 1 // Thickness can be adjusted based on your logic
-    }));
+    // Create links array based on edges from the highest k-core value
+    const links = [];
+    sortedKCoreEntries.forEach(([kCoreValue, { edges }]) => {
+        edges.forEach(([source, target]) => {
+            links.push({
+                source: String(source), // Ensure source is a string
+                target: String(target), // Ensure target is a string
+                value: 1 // Thickness can be adjusted based on your logic
+            });
+        });
+    });
 
     // Final data structure
     setInitialNodes(nodes);
@@ -162,13 +175,13 @@ export default function ForceDirectedGraph() {
 
 
   useEffect(() => {
-    generateInitialData();
-  }, []);
+    generateInitialGraph(selectedValue); // Generate data when component mounts and selectedValue changes
+}, [selectedValue]);
 
   useEffect(() => {
     // Specify the dimensions of the chart.
-    const width = window.innerWidth * 0.4;
-    const height = window.innerHeight * 0.4;
+    const width = window.innerWidth * 0.8;
+    const height = window.innerHeight * 0.8;
   
     // Specify the color scale.
     const color = d3.scaleOrdinal(d3.schemeCategory10);
@@ -396,21 +409,9 @@ export default function ForceDirectedGraph() {
     </div>
     <div className="flex flex-row items-start mt-4">
     <div className="flex-1 mr-1">
-        <svg ref={svgRef} style={{ width: 'auto', height: 'auto' }} />
+        <svg ref={svgRef} style={{ width: '100', height: '100' }} />
     </div>
     <div className="flex-1">
-        <p>Input Edge List 
-          (Not Functional)</p>
-        <Textarea 
-        className="h-[100%] w-[40%]" 
-        style={{ resize: 'none' }} 
-        value = {edgeList}
-        onChange={e => setEdgeList(e.target.value)}
-        />
-        <Button 
-        className="mt-3"
-        onClick={addEdgesFromInput}
-        >Upload Edge List</Button>
         <Button onClick={clearSvg} className="mt-2">
             Clear SVG
         </Button>
@@ -421,6 +422,22 @@ export default function ForceDirectedGraph() {
           onChange={handleFileUpload}
         />
         </div>
+        <div>
+          <RadioGroup value={selectedValue} onChange={setSelectedValue}>
+              <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="1" id="option-one" />
+                  <Label htmlFor="option-one">Small</Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="2" id="option-two" />
+                  <Label htmlFor="option-two">Medium</Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="3" id="option-three" />
+                  <Label htmlFor="option-three">Large</Label>
+              </div>
+          </RadioGroup>
+      </div>
     </div>
     <div className="flex-1">
     </div>
