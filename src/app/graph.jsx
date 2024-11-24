@@ -17,11 +17,8 @@ export default function ForceDirectedGraph() {
   const [deleteNodeId, setDeleteNodeId] = useState("");
   const [edgeList, setEdgeList] = useState('');
   const [kCoreValues, setKCoreValues] = useState({});
-  
-  const edges = [
-    [1,5], [1,2], [1,3], [1,4], [2,3], [2,4], [2,5], [3,4], [3,5], [4,5], [6,7], [6,8], [6,9], [7,8], [7,9], [8,9], [1,9], [1,11], [2,11], [2,12], [3,12], [3,13], [4,16], [5,9], [5,14], [5,15], [5,15], [6,10], [8,15], [9,10], [10,11], [12,13], [14,15], [16,17], [16,18], [17,18], [7,23], [10,24], [10,25], [11,26], [11,27], [12,28], [12,29], [13,30], [17,20], [18,19], [15,21], [15,22]
-  ];
 
+  // Uploaded Graph data
   const postGraphData = async (edges) => {
     try {
       const response = await fetch('http://localhost:8000/calculate_k_cores', {
@@ -46,8 +43,33 @@ export default function ForceDirectedGraph() {
     }
   };
 
+  // Initial graph Data
+  const initialGraphData = async (value) => {
+    try {
+      const response = await fetch('http://localhost:8000/initialize_graph', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ value: value }) // Send '1', '2', or '3'
+      });
+  
+      if (!response.ok) {
+        throw new Error(`Failed to post graph data: ${response.status}`);
+      }
+  
+      const data = await response.json();
+      console.log('Core nodes:', data.core_nodes);
+      return data.core_nodes;
+  
+    } catch (error) {
+      console.error('Failed to post graph data:', error);
+      alert('Failed to post graph data. See console for details.');
+    }
+  };
+
   const generateInitialData = async() => {
-    const kcore_nodes = await postGraphData(edges);
+    const kcore_nodes = await initialGraphData('1');
     console.log('Core nodes:', kcore_nodes); // Log core nodes
     if (!kcore_nodes) {
         console.error('No core nodes data available. Cannot generate initial data.');
