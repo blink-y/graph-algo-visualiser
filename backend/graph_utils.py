@@ -1,6 +1,6 @@
 import networkx as nx
 import matplotlib.pyplot as plt
-from networkx.algorithms.community import k_clique_communities
+from collections import defaultdict
 
 def generate_graph(edges):
     G = nx.Graph()
@@ -86,6 +86,47 @@ def run_all_kcores(edges):
 
     return final_core_nodes
 
+def find_kclique_communities(graph, k, cliques=None):
+    # Initialize or get cliques
+    if cliques is None:
+        cliques = list(nx.find_cliques(graph))
+    
+    # Create sets of nodes for each clique meeting size requirement
+    clique_sets = {i: frozenset(c) for i, c in enumerate(cliques) if len(c) >= k}
+    if not clique_sets:
+        return
+        
+    # Build adjacency mapping of clique indices
+    adjacency_map = defaultdict(set)
+    clique_indices = list(clique_sets.keys())
+    
+    # Compare each pair of cliques only once
+    for i in range(len(clique_indices)):
+        for j in range(i + 1, len(clique_indices)):
+            ci, cj = clique_indices[i], clique_indices[j]
+            # Check if cliques share k-1 nodes
+            if len(clique_sets[ci] & clique_sets[cj]) >= (k - 1):
+                adjacency_map[ci].add(cj)
+                adjacency_map[cj].add(ci)
+    
+    # Find connected components using DFS
+    visited = set()
+    for clique_idx in clique_indices:
+        if clique_idx not in visited:
+            component = set()
+            stack = [clique_idx]
+            
+            while stack:
+                current = stack.pop()
+                if current not in visited:
+                    visited.add(current)
+                    component.add(current)
+                    stack.extend(n for n in adjacency_map[current] if n not in visited)
+            
+            # Merge all cliques in the component
+            merged = frozenset().union(*(clique_sets[idx] for idx in component))
+            yield merged
+
 def get_kclique(edges):
     G = generate_graph(edges)
     
@@ -93,7 +134,7 @@ def get_kclique(edges):
     k = 2    
 
     while True:
-        c = list(k_clique_communities(G, k))
+        c = list(find_kclique_communities(G, k))
         if not c:  # Check if c is empty
             break
             
@@ -105,6 +146,70 @@ def get_kclique(edges):
         k += 1
         
     return clique_nodes
+
+def k_truss(G, k):
+    # Create a working copy
+    subgraph = G.copy()
+    
+    def count_triangles(u, v):
+        # Count common neighbors (triangles) between two nodes
+        u_neighbors = set(subgraph.neighbors(u))
+        v_neighbors = set(subgraph.neighbors(v))
+        return len(u_neighbors & v_neighbors)
+    
+    def find_weak_edges():
+        # Find edges with insufficient triangle support
+        weak_edges = []
+        processed = set()
+        
+        for node in subgraph.nodes():
+            processed.add(node)
+            # Check only forward edges to avoid duplicates
+            neighbors = set(subgraph.neighbors(node)) - processed
+            
+            for neighbor in neighbors:
+                if count_triangles(node, neighbor) < (k - 2):
+                    weak_edges.append((node, neighbor))
+                    
+        return weak_edges
+    
+    while True:
+        # Find and remove edges with insufficient support
+        edges_to_remove = find_weak_edges()
+        if not edges_to_remove:
+            break
+            
+        # Remove weak edges
+        subgraph.remove_edges_from(edges_to_remove)
+        
+        # Clean up isolated nodes
+        isolated_nodes = [n for n in subgraph.nodes() if subgraph.degree(n) == 0]
+        subgraph.remove_nodes_from(isolated_nodes)
+        
+        # If graph is empty, break
+        if not subgraph.edges():
+            break
+    
+    return subgraph
+
+def get_ktruss(edges):
+    G = generate_graph(edges)
+    
+    truss_nodes = {}
+    k = 1
+    
+    while True:
+        k_truss_nodes = k_truss(G, k)
+        
+        if not k_truss_nodes:
+            break
+        
+        truss_nodes[k] = list(k_truss_nodes)
+        k += 1
+    
+    return truss_nodes
+
+
 
 def main():
     edges = [
@@ -119,6 +224,9 @@ def main():
     
     clique_nodes = get_kclique(edges)
     print(clique_nodes)
+    
+    truss_nodes = get_ktruss(edges)
+    print(truss_nodes)
     
     return core_nodes
 
