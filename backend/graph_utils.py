@@ -59,7 +59,7 @@ def visualize_graph(G):
 
 def run_all_kcores(edges):
     G = generate_graph(edges)
-    core_nodes = {}
+    core_data = {}
     k = 1    
 
     # Collect all k-cores
@@ -70,21 +70,38 @@ def run_all_kcores(edges):
         if not k_core_edges:  # If there are no edges, break the loop
             break
         
-        core_nodes[k] = set(k_core.nodes())
+        core_data[k] = {
+            'nodes': set(k_core.nodes()),
+            'edges': set(frozenset((u,v)) for u,v in k_core_edges)
+        }
         k += 1
 
-    final_core_nodes = {}
-    
-    highest_core = k - 1  # Highest core collected
-    for current_k in range(highest_core, 0, -1):
-        if current_k == highest_core:  # For the highest core, add as is
-            final_core_nodes[current_k] = list(core_nodes[current_k])
-        else:
-            # Exclude nodes from the previous higher core
-            unique_nodes = core_nodes[current_k] - core_nodes[current_k + 1]
-            final_core_nodes[current_k] = list(unique_nodes)
+    final_core_data = {}
+    highest_core = k - 1
 
-    return final_core_nodes
+    for current_k in range(highest_core, 0, -1):
+        if current_k == highest_core:
+            # For highest core, include all its nodes and edges
+            final_core_data[current_k] = {
+                'nodes': list(core_data[current_k]['nodes']),
+                'edges': list(tuple(e) for e in core_data[current_k]['edges'])
+            }
+        else:
+            # For other cores, only include nodes and edges unique to this core
+            nodes_in_current = core_data[current_k]['nodes']
+            nodes_in_higher = core_data[current_k + 1]['nodes']
+            edges_in_current = core_data[current_k]['edges']
+            edges_in_higher = core_data[current_k + 1]['edges']
+
+            unique_nodes = nodes_in_current - nodes_in_higher
+            unique_edges = edges_in_current - edges_in_higher
+
+            final_core_data[current_k] = {
+                'nodes': list(unique_nodes),
+                'edges': list(tuple(e) for e in unique_edges)
+            }
+
+    return final_core_data
 
 def find_kclique_communities(graph, k, cliques=None):
     # Initialize or get cliques
