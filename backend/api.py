@@ -42,22 +42,13 @@ class CoreStructure(BaseModel):
 
 class CoreResponse(BaseModel):
     core_data: Dict[int, CoreStructure]
-
-@app.post("/calculate_k_cores", response_model=CoreResponse)
-async def calculate_k_cores(edge_list: EdgeList):
-    global CURRENT_GRAPH
-
-    edges = edge_list.edges
-    if not edges:
-        raise HTTPException(status_code=400, detail="Edge list cannot be empty")
     
-    # Store the current graph
-    CURRENT_GRAPH["edges"] = edges
-    core_data = graph_utils.run_all_kcores(edges)
+class AlgorithmsResponse(BaseModel):
+    core_data: Dict[int, CoreStructure]
+    clique_data: Dict[int, List[int]]
+    truss_data: Dict[int, List[int]]
     
-    return CoreResponse(core_data=core_data)
-
-@app.post("/initialize_graph", response_model=CoreResponse)
+@app.post("/initialize_graph", response_model=AlgorithmsResponse)
 async def initialize_graph(value: Value):
     global CURRENT_GRAPH
 
@@ -82,10 +73,29 @@ async def initialize_graph(value: Value):
     
     # Store the current graph
     CURRENT_GRAPH["edges"] = edges
-    core_data = graph_utils.run_all_kcores(edges)    
-    return CoreResponse(core_data=core_data)
+    core_data = graph_utils.run_all_kcores(CURRENT_GRAPH["edges"])
+    clique_data = graph_utils.get_kclique(CURRENT_GRAPH["edges"])
+    truss_data = graph_utils.get_ktruss(CURRENT_GRAPH["edges"])  
+    
+    return AlgorithmsResponse(core_data=core_data, clique_data=clique_data, truss_data=truss_data)
 
-@app.post("/add_edge", response_model=CoreResponse)
+@app.post("/execute_algorithms", response_model=AlgorithmsResponse)
+async def calculate_k_cores(edge_list: EdgeList):
+    global CURRENT_GRAPH
+
+    edges = edge_list.edges
+    if not edges:
+        raise HTTPException(status_code=400, detail="Edge list cannot be empty")
+    
+    # Store the current graph
+    CURRENT_GRAPH["edges"] = edges
+    core_data = graph_utils.run_all_kcores(edges)
+    clique_data = graph_utils.get_kclique(edges)
+    truss_data = graph_utils.get_ktruss(edges)
+    
+    return AlgorithmsResponse(core_data=core_data, clique_data=clique_data, truss_data=truss_data)
+
+@app.post("/add_edge", response_model=AlgorithmsResponse)
 async def add_edge(edge_op: EdgeOperation):
     global CURRENT_GRAPH
 
@@ -100,9 +110,12 @@ async def add_edge(edge_op: EdgeOperation):
     
     # Calculate new k-cores
     core_data = graph_utils.run_all_kcores(CURRENT_GRAPH["edges"])
-    return CoreResponse(core_data=core_data)
+    clique_data = graph_utils.get_kclique(CURRENT_GRAPH["edges"])
+    truss_data = graph_utils.get_ktruss(CURRENT_GRAPH["edges"])  
+    
+    return AlgorithmsResponse(core_data=core_data, clique_data=clique_data, truss_data=truss_data)
 
-@app.post("/remove_node", response_model=CoreResponse)
+@app.post("/remove_node", response_model=AlgorithmsResponse)
 async def remove_node(node_op: NodeOperation):
     global CURRENT_GRAPH
 
@@ -118,9 +131,12 @@ async def remove_node(node_op: NodeOperation):
     
     # Calculate new k-cores
     core_data = graph_utils.run_all_kcores(new_edges)
-    return CoreResponse(core_data=core_data)
+    clique_data = graph_utils.get_kclique(new_edges)
+    truss_data = graph_utils.get_ktruss(new_edges)  
+    
+    return AlgorithmsResponse(core_data=core_data, clique_data=clique_data, truss_data=truss_data)
 
-@app.post("/remove_edge", response_model=CoreResponse)
+@app.post("/remove_edge", response_model=AlgorithmsResponse)
 async def remove_edge(edge_op: EdgeOperation):
     global CURRENT_GRAPH
 
@@ -139,9 +155,12 @@ async def remove_edge(edge_op: EdgeOperation):
     
     # Calculate new k-cores
     core_data = graph_utils.run_all_kcores(new_edges)
-    return CoreResponse(core_data=core_data)
+    clique_data = graph_utils.get_kclique(new_edges)
+    truss_data = graph_utils.get_ktruss(new_edges)  
+    
+    return AlgorithmsResponse(core_data=core_data, clique_data=clique_data, truss_data=truss_data)
 
-@app.get("/get_current_graph", response_model=CoreResponse)
+@app.get("/get_current_graph", response_model=AlgorithmsResponse)
 async def get_current_graph():
     global CURRENT_GRAPH
 
@@ -149,4 +168,7 @@ async def get_current_graph():
         raise HTTPException(status_code=400, detail="No graph exists")
     
     core_data = graph_utils.run_all_kcores(CURRENT_GRAPH["edges"])
-    return CoreResponse(core_data=core_data)
+    clique_data = graph_utils.get_kclique(CURRENT_GRAPH["edges"])
+    truss_data = graph_utils.get_ktruss(CURRENT_GRAPH["edges"])  
+    
+    return AlgorithmsResponse(core_data=core_data, clique_data=clique_data, truss_data=truss_data)
