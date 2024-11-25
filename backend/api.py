@@ -1,5 +1,6 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from matplotlib.tri import CubicTriInterpolator
 from pydantic import BaseModel
 from typing import Dict, List, Tuple, Union
 import graph_utils
@@ -20,7 +21,7 @@ app.add_middleware(
 )
 
 # Global variable to store the current graph
-current_graph = {"edges": []}
+CURRENT_GRAPH = {"edges": []}
 
 class EdgeList(BaseModel):
     edges: List[List[int]]
@@ -44,18 +45,22 @@ class CoreResponse(BaseModel):
 
 @app.post("/calculate_k_cores", response_model=CoreResponse)
 async def calculate_k_cores(edge_list: EdgeList):
+    global CURRENT_GRAPH
+
     edges = edge_list.edges
     if not edges:
         raise HTTPException(status_code=400, detail="Edge list cannot be empty")
     
     # Store the current graph
-    current_graph["edges"] = edges
+    CURRENT_GRAPH["edges"] = edges
     core_data = graph_utils.run_all_kcores(edges)
     
     return CoreResponse(core_data=core_data)
 
 @app.post("/initialize_graph", response_model=CoreResponse)
 async def initialize_graph(value: Value):
+    global CURRENT_GRAPH
+
     if value.value == 1:
         edges = [[1,5], [1,2], [1,3], [1,4], [2,3], [2,4], [2,5], [3,4], [3,5], [4,5], 
                 [6,7], [6,8], [6,9], [7,8], [7,9], [8,9], [1,9], [1,11], [2,11], [2,12], 
@@ -64,43 +69,52 @@ async def initialize_graph(value: Value):
                 [10,24], [10,25], [11,26], [11,27], [12,28], [12,29], [13,30], [17,20], 
                 [18,19], [15,21], [15,22]]
     elif value.value == 2:
-        edges = [[2, 3]]
+        edges = [[0, 1], [0, 2], [0, 3], [0, 4], [0, 5], [0, 6], [0, 7], [0, 8], [0, 9], 
+                [0, 10], [1, 2], [1, 3], [1, 4], [1, 5], [1, 6], [1, 7], [1, 8], [1, 9],
+                [1, 10], [2, 3], [2, 4], [2, 5], [2, 6], [2, 7], [2, 8], [2, 9], [2, 10],
+                [3, 4], [3, 5], [3, 6], [3, 7], [3, 8], [3, 9], [3, 10], [4, 5], [4, 6],
+                [4, 7], [4, 8], [4, 9], [4, 10], [5, 6], [5, 7], [5, 8], [5, 9], [5, 10],
+                [6, 7], [6, 8], [6, 9], [6, 10], [7, 8], [7, 9], [7, 10], [8, 9], [8, 10], [9, 10], [10, 11], [11, 12], [11, 13], [11, 14], [11, 15], [12, 13], [12, 14], [12, 15], [12, 16], [13, 14], [13, 15], [13, 16], [13, 17], [14, 15], [14, 16], [14, 17], [14, 18], [15, 16], [15, 17], [15, 18], [15, 19], [16, 17], [16, 18], [16, 19], [16, 20], [17, 18], [17, 19], [17, 20], [18, 19], [18, 20], [19, 20], [20, 21], [21, 22], [21, 23], [21, 24], [21, 25], [22, 23], [22, 24], [22, 25], [23, 24], [23, 25], [24, 25], [25, 26], [26, 27], [26, 28], [26, 29], [27, 28], [27, 29], [27, 30], [28, 29], [28, 30], [29, 30], [30, 31], [31, 32], [31, 33], [31, 34], [32, 33], [32, 34], [32, 35], [33, 34], [33, 35], [34, 35], [35, 36], [36, 37], [36, 38], [36, 39], [37, 38], [37, 39], [37, 40], [38, 39], [38, 40], [39, 40], [40, 41], [41, 42], [41, 43], [41, 44], [42, 43], [42, 44], [42, 45], [43, 44], [43, 45], [44, 45], [45, 46], [46, 47], [46, 48], [46, 49], [47, 48], [47, 49], [47, 50], [48, 49], [48, 50], [49, 50], [50, 51], [51, 52], [51, 53], [51, 54], [52, 53], [52, 54], [52, 55], [53, 54], [53, 55], [54, 55], [55, 56], [56, 57], [56, 58], [56, 59], [57, 58], [57, 59], [57, 60], [58, 59], [58, 60], [59, 60], [60, 61], [61, 62], [61, 63], [61, 64], [62, 63], [62, 64], [62, 65], [63, 64], [63, 65], [64, 65], [65, 66], [66, 67], [66, 68], [66, 69], [67, 68], [67, 69], [67, 70], [68, 69], [68, 70], [69, 70], [70, 71], [71, 72], [71, 73], [71, 74], [72, 73], [72, 74], [72, 75], [73, 74], [73, 75], [74, 75], [75, 76], [76, 77], [76, 78], [76, 79], [77, 78], [77, 79], [77, 80], [78, 79], [78, 80], [79, 80], [80, 81], [81, 82], [81, 83], [81, 84], [82, 83], [82, 84], [82, 85], [83, 84], [83, 85], [84, 85], [85, 86], [86, 87], [86, 88], [86, 89], [87, 88], [87, 89], [87, 90], [88, 89], [88, 90], [89, 90], [90, 91], [91, 92], [91, 93], [91, 94], [92, 93], [92, 94], [92, 95], [93, 94], [93, 95], [94, 95], [95, 96], [96, 97], [96, 98], [96, 99], [97, 98], [97, 99], [98, 99], [0, 20], [0, 30], [0, 40], [0, 50], [0, 60], [0, 70], [0, 80], [0, 90], [10, 30], [10, 40], [10, 50], [10, 60], [10, 70], [10, 80], [10, 90], [20, 40], [20, 50], [20, 60], [20, 70], [20, 80], [20, 90], [30, 50], [30, 60], [30, 70], [30, 80], [30, 90], [40, 60], [40, 70], [40, 80], [40, 90], [50, 70], [50, 80], [50, 90], [60, 80], [60, 90], [70, 90]]
     elif value.value == 3:
         edges = [[3, 4]]
     else:
         raise HTTPException(status_code=400, detail="Invalid value. Please use 1, 2, or 3.")
     
     # Store the current graph
-    current_graph["edges"] = edges
+    CURRENT_GRAPH["edges"] = edges
     core_data = graph_utils.run_all_kcores(edges)    
     return CoreResponse(core_data=core_data)
 
 @app.post("/add_edge", response_model=CoreResponse)
 async def add_edge(edge_op: EdgeOperation):
-    if not current_graph["edges"]:
-        current_graph["edges"] = []
+    global CURRENT_GRAPH
+
+    if not CURRENT_GRAPH["edges"]:
+        CURRENT_GRAPH["edges"] = []
     
     new_edge = [edge_op.source, edge_op.target]
     
     # Check if the edge already exists
-    if new_edge not in current_graph["edges"] and [edge_op.target, edge_op.source] not in current_graph["edges"]:
-        current_graph["edges"].append(new_edge)
+    if new_edge not in CURRENT_GRAPH["edges"] and [edge_op.target, edge_op.source] not in CURRENT_GRAPH["edges"]:
+        CURRENT_GRAPH["edges"].append(new_edge)
     
     # Calculate new k-cores
-    core_data = graph_utils.run_all_kcores(current_graph["edges"])
+    core_data = graph_utils.run_all_kcores(CURRENT_GRAPH["edges"])
     return CoreResponse(core_data=core_data)
 
 @app.post("/remove_node", response_model=CoreResponse)
 async def remove_node(node_op: NodeOperation):
-    if not current_graph["edges"]:
+    global CURRENT_GRAPH
+
+    if not CURRENT_GRAPH["edges"]:
         raise HTTPException(status_code=400, detail="No graph exists")
     
     # Create a new edge list excluding edges that contain the node to be removed
-    new_edges = [edge for edge in current_graph["edges"] 
+    new_edges = [edge for edge in CURRENT_GRAPH["edges"] 
                 if node_op.node not in edge]
     
     # Update the current graph
-    current_graph["edges"] = new_edges
+    CURRENT_GRAPH["edges"] = new_edges
     
     # Calculate new k-cores
     core_data = graph_utils.run_all_kcores(new_edges)
@@ -108,18 +122,20 @@ async def remove_node(node_op: NodeOperation):
 
 @app.post("/remove_edge", response_model=CoreResponse)
 async def remove_edge(edge_op: EdgeOperation):
-    if not current_graph["edges"]:
+    global CURRENT_GRAPH
+
+    if not CURRENT_GRAPH["edges"]:
         raise HTTPException(status_code=400, detail="No graph exists")
     
     edge_to_remove = [edge_op.source, edge_op.target]
     reverse_edge = [edge_op.target, edge_op.source]
     
     # Remove the edge if it exists
-    new_edges = [edge for edge in current_graph["edges"] 
+    new_edges = [edge for edge in CURRENT_GRAPH["edges"] 
                 if edge != edge_to_remove and edge != reverse_edge]
     
     # Update the current graph
-    current_graph["edges"] = new_edges
+    CURRENT_GRAPH["edges"] = new_edges
     
     # Calculate new k-cores
     core_data = graph_utils.run_all_kcores(new_edges)
@@ -127,8 +143,10 @@ async def remove_edge(edge_op: EdgeOperation):
 
 @app.get("/get_current_graph", response_model=CoreResponse)
 async def get_current_graph():
-    if not current_graph["edges"]:
+    global CURRENT_GRAPH
+
+    if not CURRENT_GRAPH["edges"]:
         raise HTTPException(status_code=400, detail="No graph exists")
     
-    core_data = graph_utils.run_all_kcores(current_graph["edges"])
+    core_data = graph_utils.run_all_kcores(CURRENT_GRAPH["edges"])
     return CoreResponse(core_data=core_data)
