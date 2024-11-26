@@ -1,12 +1,16 @@
 "use-client";
 
+import { useRouter } from 'next/navigation'
 import * as d3 from "d3";
 import React, { useState, useEffect, useRef } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
+import { Menubar, MenubarMenu, MenubarTrigger } from "@/components/ui/menubar"; 
+
 export default function ForceDirectedGraph() {
+  const router = useRouter();
   const svgRef = useRef(null);
   const [Nodes, setNodes] = useState([]);
   const [Links, setLinks] = useState([]);
@@ -16,7 +20,7 @@ export default function ForceDirectedGraph() {
   const [deleteEdgeTarget, setDeleteEdgeTarget] = useState('');
   const [deleteNodeId, setDeleteNodeId] = useState("");
   const [kCoreValues, setKCoreValues] = useState({});
-  const [selectedValue, setSelectedValue] = useState('2');
+  const [selectedValue, setSelectedValue] = useState('1');
   const [selectedKCore, setSelectedKCore] = useState(null);
   const [graphData, setGraphData] = useState(null);
   const [maxKCore, setMaxKCore] = useState(0);
@@ -50,14 +54,15 @@ export default function ForceDirectedGraph() {
   
   // Process K-Core Data
   const processKCoreData = (kCoreData) => {
-    // Create a Map to track the highest k-core value for each node
     const nodeCoreMap = new Map();
-    const nodesSet = new Set(); // Define nodesSet here
+    const nodesSet = new Set(); 
+    const nodeKCoreValue = {}; // Store k-core values for each node
 
     // Process updated k-core data to populate nodeCoreMap
     Object.entries(kCoreData).forEach(([kCoreValue, { nodes: nodeIds, edges }]) => {
         const numericKCoreValue = Number(kCoreValue);
         nodeIds.forEach(id => {
+          nodeKCoreValue[id] = numericKCoreValue;
             if (!nodeCoreMap.has(id) || nodeCoreMap.get(id) < numericKCoreValue) {
                 nodeCoreMap.set(id, numericKCoreValue);
             }
@@ -100,6 +105,7 @@ export default function ForceDirectedGraph() {
         });
     });
 
+    setKCoreValues(nodeKCoreValue);
     setNodes(nodes);
     setLinks(edgesToUpload);
     refreshGraph();
@@ -283,13 +289,7 @@ export default function ForceDirectedGraph() {
   };
 
   const kCoreValuesArray = Array.from({ length: maxKCore }, (_, i) => (i + 1).toString());
-
-  // const maxKCoreValue = async() => {
-  //   data = await currentGraphData();
-  //   const maxKCore = Math.max(...Object.keys(data).map(Number));
-  //   return maxKCore;
-  // };
-
+  
   const handleKCoreChange = async (value) => {
     // currentGraphData();
     setSelectedKCore(value);
@@ -359,24 +359,22 @@ export default function ForceDirectedGraph() {
     // Specify the dimensions of the chart.
     const width = window.innerWidth;
     const height = window.innerHeight;
-  
+    
     // Specify the color scale.
     const color = d3.scaleOrdinal(d3.schemeCategory10);
-  
+
     // Create a simulation with several forces.
     const simulation = d3.forceSimulation(Nodes)
       .force("link", d3.forceLink(Links)
         .id(d => d.id)
         .strength(link => {
-          const sourceCore = kCoreValues[link.source] || 0; // Get the k-core value of the source
-          const targetCore = kCoreValues[link.target] || 0; // Get the k-core value of the target
-          return 1 + 0.5 * Math.min(sourceCore, targetCore); // Strength based on k-core values
-        }))
-      .force("charge", d3.forceManyBody().strength(node => {
-        const coreValue = kCoreValues[node.id] || 0; // Get the k-core value of the node
-        return -10 * (5 + coreValue); // Repel higher k-core values more strongly
-      }))
-      .force("center", d3.forceCenter(0, 0)); // Center the graph
+          const sourceCore = 0;
+          const targetCore = 0;
+          return 1 + 0.5 * Math.min(sourceCore, targetCore);
+        })
+      )
+      .force("charge", d3.forceManyBody().strength(-50))
+      .force("center", d3.forceCenter(0, 0)); 
   
     // Create the SVG container and set dimensions.
     const svg = d3.select(svgRef.current)
@@ -427,30 +425,93 @@ export default function ForceDirectedGraph() {
         .attr("cx", d => d.x)
         .attr("cy", d => d.y);
     });
+    setLoading(true);
+
+    simulation.on("end", () => {
+      setLoading(false);
+      const finalPositions = Nodes.map(n => ({ id: n.id, x: n.x, y: n.y }));
+      console.log("Final node positions:", finalPositions);
+      drawPolygons(finalPositions); // Call the function to draw the polygon with final positions
+    });
   
-    // Drag functions
+    const drawPolygons = () => {
+      const kCoreGroups = {};
+      console.log('K-Core Values:', kCoreValues);
+      // Group nodes by their k-core values
+      for (const [nodeId, kCoreValue] of Object.entries(kCoreValues)) {
+        console.log('Current Node ID:', nodeId, 'K-Core Value:', kCoreValue);
+          if (!kCoreGroups[kCoreValue]) {
+              kCoreGroups[kCoreValue] = [];
+          }
+          kCoreGroups[kCoreValue].push(nodeId);
+      }
+      
+      console.log('K-Core Groups:', kCoreGroups);
+
+      // Remove all existing polygons before drawing new ones
+      svg.selectAll("polygon").remove();
+      
+      // Draw polygon for each k-core group
+      for (const [kCoreValue, nodeIds] of Object.entries(kCoreGroups)) {
+        console.log('K-Core Value:', kCoreValue, 'Node IDs:', nodeIds);
+        const finalPositions = nodeIds.map(id => {
+              const node = Nodes.find(n => n.id === id);
+              return node ? { x: node.x, y: node.y } : null;
+          }).filter(Boolean);
+          
+          if (finalPositions.length > 2) {
+              const points = finalPositions.map(node => [node.x, node.y]);
+              const hull = d3.polygonHull(points);
+              
+              if (hull) {
+                console.log('Hull:', hull);
+                  const colorMapping = {
+                      1: 'rgba(255, 204, 204, 0.5)', // Light red
+                      2: 'rgba(255, 153, 204, 0.5)', // Light pink
+                      3: 'rgba(255, 102, 204, 0.5)', // Medium pink
+                      4: 'rgba(255, 51, 204, 0.5)',  // Dark pink
+                      5: 'rgba(255, 0, 204, 0.5)'    // Bright pink
+                  };
+
+                  console.log('Selected Color Mapping', colorMapping[kCoreValue]);
+                  const fillColor = colorMapping[kCoreValue];
+                  svg.append("polygon")
+                      .datum(hull)
+                      .attr("points", d => d.map(point => point.join(",")).join(" "))
+                      .attr("fill", fillColor)
+                      .attr("stroke", fillColor)
+                      .attr("stroke-width", 1)
+                      .attr("pointer-events", "none");
+              }
+          }
+      }
+  }
+
     function dragstarted(event) {
       if (!event.active) simulation.alphaTarget(0.3).restart();
       event.subject.fx = event.subject.x;
       event.subject.fy = event.subject.y;
     }
   
+    // Update the subject (dragged node) position during drag.
     function dragged(event) {
       event.subject.fx = event.x;
       event.subject.fy = event.y;
     }
   
+    // Restore the target alpha so the simulation cools after dragging ends.
+    // Unfix the subject position now that it’s no longer being dragged.
     function dragended(event) {
       if (!event.active) simulation.alphaTarget(0);
       event.subject.fx = null;
       event.subject.fy = null;
     }
-  
+
     // Cleanup function to stop the simulation when the component unmounts or updates.
     return () => {
       simulation.stop();
     };
-  }, [Nodes, Links]);
+  }, [Nodes, Links, kCoreValues]);
 
     // Function to remove all SVG elements
     const clearSvg = () => {
@@ -474,8 +535,75 @@ export default function ForceDirectedGraph() {
       }
 
     }
+
+    const exportKCore = async () => {
+      setLoading(true);
+      try {
+          const response = await fetch('http://localhost:8000/get_current_graph', {
+              method: 'GET',
+              headers: {
+                  'Content-Type': 'application/json'
+              },
+          });
+  
+          if (!response.ok) {
+              throw new Error(`Failed to fetch graph data: ${response.status}`);
+          }
+  
+          const data = await response.json();
+
+          const fileData = JSON.stringify(data, null, 2);
+          const blob = new Blob([fileData], { type: 'application/json' });
+          const link = document.createElement('a');
+          link.href = URL.createObjectURL(blob);
+          link.download = 'graph_data.json';
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          URL.revokeObjectURL(link.href);
+  
+      } catch (error) {
+          console.error('Failed to fetch graph data:', error);
+          alert('Failed to fetch graph data. See console for details.');
+      } finally {
+          setLoading(false);
+      }
+  };
+
   return (
     <div>
+      <div className="flex flex-row mb-4 justify-center">
+      <div className="flex justify-center">
+      <div className="flex justify-center">
+      <Menubar className="bg-white">
+      <MenubarMenu>
+          <MenubarTrigger
+            className="hover:bg-gray-200 transition-colors duration-200"
+            onClick={() => router.push('app/K-Core/FDGraph')}
+          >
+            K-Core
+          </MenubarTrigger>
+        </MenubarMenu>
+        <MenubarMenu>
+          <MenubarTrigger
+            className="hover:bg-gray-200 transition-colors duration-200"
+            onClick={() => router.push('/K-Core/DTGraph')}
+          >
+            Delaunay Triangulations
+          </MenubarTrigger>
+        </MenubarMenu>
+        <MenubarMenu>
+          <MenubarTrigger
+            className="hover:bg-gray-200 transition-colors duration-200" // Add hover effect
+            onClick={() => router.push('/convex-hull')}
+          >
+            Convex Polygon Hull
+          </MenubarTrigger>
+        </MenubarMenu>
+      </Menubar>
+    </div>
+    </div>
+        </div>
       <div className="flex flex-row mb-4 justify-center"> 
       <div className="flex flex-col mb-2">
             <div className="flex flex-row mb-2">
@@ -562,9 +690,10 @@ export default function ForceDirectedGraph() {
       <div className="flex flex-col ml-20 mt-3">
       <div className="flex-1 ">
         <div className="mt-3 mb-2">
-        <Button onClick={handleButtonClick} className="mr-2 text-md">Upload Graph</Button>
-        <Button onClick={clearSvg} className="mr-2 text-md">Clear Graph</Button>
-        <Button onClick={exportSvg} className="mr-2 text-md">Export Graph</Button>
+        <Button onClick={handleButtonClick} className="mr-2 mb-2 text-md">Upload Graph</Button>
+        <Button onClick={clearSvg} className="mr-2 mb-2 text-md">Clear Graph</Button>
+        <Button onClick={exportSvg} className="mr-2 mb-2 text-md">Export Graph</Button>
+        <Button onClick={exportKCore} className="mr-2 mb-2 text-md">Export K-Cores</Button>
         <input
           type="file"
           accept=".txt" // or the appropriate file types
@@ -604,6 +733,3 @@ export default function ForceDirectedGraph() {
 
 );
 };
-
-
-

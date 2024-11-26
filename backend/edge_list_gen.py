@@ -1,6 +1,6 @@
 def main():
     edge_list = []
-    with open("../Graphs/100nodes.txt", "r") as f:
+    with open("../Graphs/Graph.txt", "r") as f:
         for line in f:
             # Strip whitespace, split by comma, and convert to integers
             edge = list(map(int, line.strip().split(',')))
