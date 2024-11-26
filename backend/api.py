@@ -39,9 +39,6 @@ class EdgeOperation(BaseModel):
 class CoreStructure(BaseModel):
     nodes: List[int]
     edges: List[Union[List[int], Tuple[int, int]]]
-
-class CoreResponse(BaseModel):
-    core_data: Dict[int, CoreStructure]
     
 class AlgorithmsResponse(BaseModel):
     core_data: Dict[int, CoreStructure]
