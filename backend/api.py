@@ -86,10 +86,11 @@ async def calculate_k_cores(edge_list: EdgeList):
     
     # Store the current graph
     CURRENT_GRAPH["edges"] = edges
+    core_data = graph_utils.run_all_kcores(edges)
     clique_data = graph_utils.get_kclique(edges)
     truss_data = graph_utils.get_ktruss(edges)
     
-    return AlgorithmsResponse(clique_data=clique_data, truss_data=truss_data)
+    return AlgorithmsResponse(core_data=core_data, clique_data=clique_data, truss_data=truss_data)
 
 @app.post("/add_edge", response_model=AlgorithmsResponse)
 async def add_edge(edge_op: EdgeOperation):

@@ -1,164 +1,857 @@
+"use-client";
+
+import { useRouter } from 'next/navigation'
 import * as d3 from "d3";
 import React, { useState, useEffect, useRef } from 'react';
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
+import { Menubar, MenubarMenu, MenubarTrigger } from "@/components/ui/menubar"; 
 
-function sleep(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms));
-}
+export default function ForceDirectedGraph() {
+  const router = useRouter();
+  const svgRef = useRef(null);
+  const [Nodes, setNodes] = useState([]);
+  const [Links, setLinks] = useState([]);
+  const [addEdgeSource, setAddEdgeSource] = useState('');
+  const [addEdgeTarget, setAddEdgeTarget] = useState('');
+  const [deleteEdgeSource, setDeleteEdgeSource] = useState('');
+  const [deleteEdgeTarget, setDeleteEdgeTarget] = useState('');
+  const [deleteNodeId, setDeleteNodeId] = useState("");
+  const [kCoreValues, setKCoreValues] = useState({});
+  const [selectedValue, setSelectedValue] = useState('1');
+  const [selectedKCore, setSelectedKCore] = useState(null);
+  const [graphData, setGraphData] = useState(null);
+  const [maxKCore, setMaxKCore] = useState(0);
+  const [loading, setLoading] = useState(false);
+  const [visualizationState, setVisualizationState] = useState('k-Core');
+  const [kCliqueValues, setKCliqueValues] = useState({});
+  const [kTrussValues, setKTrussValues] = useState({});
+  const [maxKclique, setMaxKclique] = useState(0);
+  const [maxKtruss, setMaxKtruss] = useState(0);
+  const [selectedKclique, setSelectedKclique] = useState('1');
+  const [selectedKtruss, setSelectedKtruss] = useState('1');
 
-export default function DelaunayGraph() {
-  const svgRef = useRef();
-  const [nodes, setNodes] = useState([]);
-  const [edges, setEdges] = useState([]);
-  const [edgeList, setEdgeList] = useState('');
 
-  const generateInitialData = () => {
-    const initialEdges = [
-      [1, 5], [1, 2], [1, 3], [1, 4], [2, 3], [2, 4], [2, 5], [3, 4], [3, 5], [4, 5],
-      [6, 7], [6, 8], [6, 9], [7, 8], [7, 9], [8, 9], [1, 9], [1, 11], [2, 11], [2, 12],
-      [3, 12], [3, 13], [4, 16], [5, 9], [5, 14], [5, 15], [6, 10], [8, 15], [9, 10],
-      [10, 11], [12, 13], [14, 15], [16, 17], [16, 18], [17, 18], [7, 23], [10, 24],
-      [10, 25], [11, 26], [11, 27], [12, 28], [12, 29], [13, 30], [17, 20], [18, 19],
-      [15, 21], [15, 22]
-    ];
+  // Upload Graph data
+  const postGraphData = async (edges) => {
+    try {
+      const response = await fetch('http://localhost:8000/calculate_k_cores', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ edges: edges.map(edge => [Number(edge[0]), Number(edge[1])]) })
+      });
 
-    const nodesSet = new Set();
-    initialEdges.forEach(edge => {
-      nodesSet.add(edge[0]);
-      nodesSet.add(edge[1]);
+      if (!response.ok) {
+        throw new Error(`Failed to post graph data: ${response.status}`);
+      }
+
+      const data = await response.json();
+      return data.core_data;
+
+    } catch (error) {
+      console.error('Failed to post graph data:', error);
+      alert('Failed to post graph data. See console for details.');
+    }
+  };
+  
+  // Process K-Core Data
+  const processKCoreData = (kCoreData) => {
+    const nodeCoreMap = new Map();
+    const nodesSet = new Set(); 
+    const nodeKCoreValue = {}; 
+
+    Object.entries(kCoreData).forEach(([kCoreValue, { nodes: nodeIds, edges }]) => {
+        const numericKCoreValue = Number(kCoreValue);
+        nodeIds.forEach(id => {
+          nodeKCoreValue[id] = numericKCoreValue;
+            if (!nodeCoreMap.has(id) || nodeCoreMap.get(id) < numericKCoreValue) {
+                nodeCoreMap.set(id, numericKCoreValue);
+            }
+        });
+
+        // Add nodes from the edges
+        edges.forEach(([source, target]) => {
+            nodesSet.add(source);
+            nodesSet.add(target);
+        });
     });
 
-    const nodesArray = Array.from(nodesSet).map(id => ({
-      id: String(id),
-      kCoreValue: 0,
-      x: Math.random() * 1000,
-      y: Math.random() * 1000,
-    }));
+    const colorMapping = {
+        1: '#FFCCCC',
+        2: '#FF99CC',
+        3: '#FF66CC',
+        4: '#FF33CC',
+        5: '#FF00CC'
+    };
 
-    setNodes(nodesArray);
+    const getColorForKCoreValue = (kCoreValue) => {
+        return colorMapping[kCoreValue] || '#FFFFFF'; // Fallback to white if the k-core value is not defined
+    };
 
-    // Create edges with string IDs instead of indices
-    const edgesArray = initialEdges.map(([source, target]) => ({
-      source: String(source),
-      target: String(target)
-    }));
+    // Create an array of unique nodes based on the highest k-core value
+    const nodes = Array.from(nodesSet).map(id => {
+        const kCoreValue = nodeCoreMap.get(id) || 0; // Get k-core value or default to 0
+        return {
+            id: String(id),
+            group: String.fromCharCode(65 + Math.min(kCoreValue, 4)), // Group A-E
+            color: getColorForKCoreValue(kCoreValue) // Assign color based on k-core value
+        };
+    });
 
-    setEdges(edgesArray);
+    // Extract edges from kCoreData for uploading
+    const edgesToUpload = [];
+    Object.values(kCoreData).forEach(({ edges }) => {
+        edges.forEach(([source, target]) => {
+            edgesToUpload.push({ source: String(source), target: String(target), value: 1 });
+        });
+    });
+
+    setKCoreValues(nodeKCoreValue);
+    setNodes(nodes);
+    setLinks(edgesToUpload);
+    refreshGraph();
+};
+
+  //Add Edge
+  const addEdge = async (source, target) => {
+    const newEdge = { source, target };
+
+    try {
+        const response = await fetch('http://localhost:8000/add_edge', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(newEdge),
+        });
+        const data = await response.json();
+        const kCoreData = data.core_data; // Assuming your API returns the updated k-core data
+        console.log('Updated core data:', kCoreData);
+        processKCoreData(kCoreData)  
+    } catch (error) {
+        alert(`Error adding edge: ${error.message}`);
+    }
+  };
+
+  // Delete Edge
+  const deleteEdge = async (source, target) => {
+    const newEdge = { source, target };
+
+    try {
+        const response = await fetch('http://localhost:8000/remove_edge', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(newEdge),
+        });
+        const data = await response.json();
+        const kCoreData = data.core_data; // Assuming your API returns the updated k-core data
+        processKCoreData(kCoreData)
+    } catch (error) {
+        alert(`Error adding edge: ${error.message}`);
+    }
+  };
+
+  // Delete Node
+  const deleteNode = async (nodeId) => {
+    const nodeData = { node: nodeId };
+
+    try {
+        const response = await fetch('http://localhost:8000/remove_node', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(nodeData),
+        });
+
+        if (!response.ok) {
+            throw new Error('Failed to delete node');
+        }
+
+        const data = await response.json();
+        const kCoreData = data.core_data; // Assuming your API returns the updated k-core data
+        processKCoreData(kCoreData)
+    } catch (error) {
+        alert(`Error deleting node: ${error.message}`);
+      }
+    };
+  
+  // Generating Sample Graphs
+  const handleValueChange = async (value) => {
+    setSelectedValue(value);
+    sampleGraph(value);
+    console.log('Selected Value:', value);
+  };
+  const sampleGraph = async (value) => {
+    try {
+      const response = await fetch('http://localhost:8000/initialize_graph', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ value: value }) // Send '1', '2', or '3'
+      });
+  
+      if (!response.ok) {
+        throw new Error(`Failed to post graph data: ${response.status}`);
+      }
+  
+      const data = await response.json();
+      const kCoreData = data.core_data;
+      processKCoreData(kCoreData);
+    } catch (error) {
+      console.error('Failed to post graph data:', error);
+      alert('Failed to post graph data. See console for details.');
+    }
+  }
+
+  // Initial graph Data
+  const initialGraphData = async (value) => {
+    try {
+      const response = await fetch('http://localhost:8000/initialize_graph', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ value: value }) // Send '1', '2', or '3'
+      });
+  
+      if (!response.ok) {
+        throw new Error(`Failed to post graph data: ${response.status}`);
+      }
+  
+      const data = await response.json();
+      return data.core_data;
+  
+    } catch (error) {
+      console.error('Failed to post graph data:', error);
+      alert('Failed to post graph data. See console for details.');
+    }
+  };
+  //Initial Graph
+  const generateInitialGraph = async (value) => {
+    const data = await initialGraphData(value);
+    if (!data) {
+        console.error('No core nodes data available. Cannot generate initial data.');
+        return; // Exit if there was an error
+    }
+    processKCoreData(data); // Process k-core data
+};
+
+  useEffect(() => {
+    generateInitialGraph(selectedValue);
+  }, [selectedValue]);
+
+  const currentGraphData = async () => {
+    setLoading(true);
+    try {
+      const response = await fetch('http://localhost:8000/get_current_graph', {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+      });
+  
+      if (!response.ok) {
+        throw new Error(`Failed to post graph data: ${response.status}`);
+      }
+  
+      const data = await response.json();
+      setGraphData(data.core_data);
+      const maxKCore = Math.max(...Object.keys(data.core_data).map(Number));
+      const maxKclique = Math.max(...Object.keys(data.clique_data).map(Number));
+      const maxKtruss = Math.max(...Object.keys(data.truss_data).map(Number));
+
+      setMaxKtruss(maxKtruss);
+      setMaxKclique(maxKclique);
+      console.log('Max K-Clique:', maxKclique);
+      console.log('Max K-Truss:', maxKtruss);
+      setMaxKCore(maxKCore);
+      setKCliqueValues(data.clique_data);
+      console.log('K-Clique Values:', data.clique_data);
+      setKTrussValues(data.truss_data);
+      console.log('K-Truss Values:', data.truss_data);
+      
+  
+    }
+    catch (error) {
+      console.error('Failed to post graph data:', error);
+      alert('Failed to post graph data. See console for details.');
+    }
+    finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
-    generateInitialData();
+    currentGraphData();
   }, []);
 
+  const refreshGraph = async () => {  
+    currentGraphData();
+    console.log('Refreshing Graph');
+  };
+
+  const kCoreValuesArray = Array.from({ length: maxKCore }, (_, i) => (i + 1).toString());
+  const kCliqueValuesArray = Array.from({ length: maxKclique }, (_, i) => (i + 1).toString());
+  const kTrussValuesArray = Array.from({ length: maxKclique }, (_, i) => (i + 1).toString());
+  
+  const handleKCoreChange = async (value) => {
+    // currentGraphData();
+    setSelectedKCore(value);
+    console.log('Selected K-Core:', value);
+    dynamicGraph(value);
+  }
+
+  const formatKCliqueData = (kCoreValues) => {
+    const formattedData = {};
+    Object.entries(kCoreValues).forEach(([kCliqueValue, nodeIds]) => {
+        const numericKCliqueValue = Number(kCliqueValue);
+        console.log(`Processing kCliqueValue: ${kCliqueValue}`, nodeIds);
+        if (Array.isArray(nodeIds)) {
+            nodeIds.forEach(id => {
+                if (!formattedData[id] || formattedData[id] < numericKCliqueValue) {
+                    formattedData[id] = numericKCliqueValue;
+                }
+            });
+        } else {
+            console.warn(`Warning: nodeIds is not an array for kCliqueValue ${kCliqueValue}`, nodeIds);
+        }
+      });
+    return formattedData;
+  };
+  
+  const kCliqueValueChange = async (value) => {
+    const filterData = (data, threshold) => {
+      return Object.fromEntries(
+        Object.entries(data).filter(([key, val]) => val >= threshold)
+      );
+      
+    };
+    console.log('K-Clique Values to be formatted: ', kCliqueValues);
+    const formattedkCliqueData = formatKCliqueData(kCliqueValues);
+    const filteredValues = filterData(formattedkCliqueData, value); 
+    console.log('filtered K-Clique Values:', filteredValues);
+    setKCliqueValues(filteredValues);
+  }
+
+  const handleKCliqueChange = async (value) => {
+    setSelectedKclique(value);
+    refreshGraph();
+    console.log('Selected K-Clique:', value);
+    kCliqueValueChange(value);
+
+  }
+
+  
+  const handleKTrussChange = async (value) => {
+    setSelectedKclique(value);
+    console.log('Selected K-Truss:', value);
+    kTrussValueChange(value);
+  }
+
+  const kTrussValueChange = async (value) => {
+    const filterData = (data, kTrussValue) => {
+      return Object.fromEntries(
+          Object.entries(data).filter(([key, value]) => value <= kTrussValue)
+        );
+      
+      };
+      console.log('K-Truss Values:', kTrussValues);
+      setKTrussValues(filterData(kTrussValues, value));
+  }
+
+  const dynamicGraph = async (value) => {
+    if (!graphData) {
+        console.error('No graph data available. Cannot generate graph.');
+        return; 
+    }
+
+    console.log('Graph Data:', graphData);
+    const kCoreValue = parseInt(value, 10);
+    const filteredData = {};
+
+    const maxKCore = Math.max(...Object.keys(graphData).map(Number));
+    for (let k = maxKCore; k >= kCoreValue; k--) {
+        if (graphData[k]) {
+            filteredData[k] = {
+                nodes: [...graphData[k].nodes], 
+                edges: [...graphData[k].edges]  
+            };
+        }
+    }
+
+    console.log('Filtered Data:', filteredData);
+    processKCoreData(filteredData);
+
+}
+
+
+
+  const fileInputRef = useRef(null);
+  const handleButtonClick = () => {
+    fileInputRef.current.click();
+  };
+  const handleFileUpload = async (event) => {
+    const file = event.target.files[0];
+    if (file) {
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+            const content = e.target.result;
+            const edges = parseGraphData(content);
+            console.log('Uploaded edges:', edges); // Log the uploaded edges
+            
+            // Send the uploaded graph data to the backend
+            const kCoreData = await postGraphData(edges);
+            console.log('Core meow:', kCoreData); // Log core nodes
+            processKCoreData(kCoreData); // Process k-core data
+        };
+        reader.readAsText(file);
+    }
+  };
+  
+    const parseGraphData = (data) => {
+      const edgeLines = data.split('\n').filter(line => line.trim() !== '');
+      const edges = edgeLines.map(line => {
+        const [source, target] = line.split(',').map(node => node.trim());
+        return [Number(source), Number(target)]; // Convert to numbers and return as an array
+      });
+      return edges;
+    };
+
   useEffect(() => {
-    if (nodes.length === 0 || edges.length === 0) return;
+    // Specify the dimensions of the chart.
+    const width = window.innerWidth;
+    const height = window.innerHeight;
+    
+    // Specify the color scale.
+    const color = d3.scaleOrdinal(d3.schemeCategory10);
 
-    const width = 1000;
-    const height = 1000;
-
-    const svg = d3.select(svgRef.current);
+    // Create a simulation with several forces.
+    const simulation = d3.forceSimulation(Nodes)
+      .force("link", d3.forceLink(Links)
+        .id(d => d.id)
+        .strength(link => {
+          const sourceCore = 0;
+          const targetCore = 0;
+          return 1;
+        })
+      )
+      .force("charge", d3.forceManyBody().strength(-50))
+      .force("center", d3.forceCenter(0, 0)); 
+  
+    // Create the SVG container and set dimensions.
+    const svg = d3.select(svgRef.current)
+      .attr("width", width)
+      .attr("height", height)
+      .attr("viewBox", [-width / 2, -height / 2, width, height])
+      .attr("style", "max-width: auto; height: auto;")
+      .attr("class", "responsive-svg");
+  
+    // Remove all existing elements in the SVG container.
     svg.selectAll("*").remove();
-
-    // Create a simulation with proper node references
-    const simulation = d3.forceSimulation(nodes)
-      .force("link", d3.forceLink(edges).id(d => d.id).distance(50).strength(1))
-      .force("charge", d3.forceManyBody().strength(-100))
-      .force("center", d3.forceCenter(width / 2, height / 2));
-
-    // Draw edges
+  
+    // Add lines for links and circles for nodes.
     const link = svg.append("g")
+      .attr("stroke", "#999")
+      .attr("stroke-opacity", 1)
       .selectAll("line")
-      .data(edges)
+      .data(Links)
       .join("line")
-      .attr("stroke", "black");
-
-    // Draw nodes
-    const highlightedNodeIds = ['17', '18', '16'];
+      .attr("stroke-width", d => Math.sqrt(d.value));
+  
     const node = svg.append("g")
+      .attr("stroke", "#fff")
+      .attr("stroke-width", 1.5)
       .selectAll("circle")
-      .data(nodes)
+      .data(Nodes)
       .join("circle")
-      .attr("r", d => highlightedNodeIds.includes(d.id) ? 8 : 5)
-      .attr("fill", d => highlightedNodeIds.includes(d.id) ? 'orange' : d3.scaleOrdinal(d3.schemeCategory10)(d.kCoreValue));
-
-    // Update positions on tick
+      .attr("r", 5)
+      .attr("fill", d => color(d.group))
+      .call(d3.drag()
+        .on("start", dragstarted)
+        .on("drag", dragged)
+        .on("end", dragended)
+      );
+  
+    node.append("title")
+      .text(d => d.id);
+  
+    // Set the position attributes of links and nodes each time the simulation ticks.
     simulation.on("tick", () => {
       link
         .attr("x1", d => d.source.x)
         .attr("y1", d => d.source.y)
         .attr("x2", d => d.target.x)
         .attr("y2", d => d.target.y);
-
+  
       node
         .attr("cx", d => d.x)
         .attr("cy", d => d.y);
     });
 
-    // Capture node coordinates when the simulation ends
     simulation.on("end", () => {
-      const finalPositions = nodes.map(n => ({ id: n.id, x: n.x, y: n.y }));
+      const finalPositions = Nodes.map(n => ({ id: n.id, x: n.x, y: n.y }));
       console.log("Final node positions:", finalPositions);
-      drawPolygon(finalPositions); // Call the function to draw the polygon with final positions
+      drawPolygons(finalPositions); // Call the function to draw the polygon with final positions
     });
 
-    const drawPolygon = (finalPositions) => {
-      const highlightedNodes = finalPositions.filter(node => highlightedNodeIds.includes(node.id));
-      if (highlightedNodes.length > 2) {
-        const points = highlightedNodes.map(node => [node.x, node.y]);
-        
-        // Calculate the centroid using d3.polygonCentroid
-        const centroid = d3.polygonCentroid(points);
+  
+    const drawPolygons = () => {
+      refreshGraph();
+      const kCoreGroups = {};
+      let polyData = {};
+      console.log('K-Core Values:', kCoreValues);
+      console.log('K-Clique Values:', kCliqueValues);
+      console.log('K-Truss Values:', kTrussValues);
 
-        // Sort points counterclockwise around the centroid
-        points.sort((a, b) => {
-          const angleA = Math.atan2(a[1] - centroid[1], a[0] - centroid[0]);
-          const angleB = Math.atan2(b[1] - centroid[1], b[0] - centroid[0]);
-          return angleA - angleB; // Sort by angle
-        });
+      switch (visualizationState) {
+        case 'k-core':
+            polyData = kCoreValues;
+    
+        case 'k-clique':
+            polyData = kCliqueValues;
+    
+        case 'k-truss':
+            polyData = kTrussValues;
+        default:
+            polyData = kCoreValues;
+    }
 
-        const hull = d3.polygonHull(points);
-        if (hull) {
-          svg.append("polygon")
-            .datum(hull)
-            .attr("points", d => d.map(point => point.join(",")).join(" "))
-            .attr("fill", "rgba(255, 255, 0, 0.5)")
-            .attr("pointer-events", "none");
-        }
+    console.log('Polygon k-clique:', kCliqueValues);
+    console.log('k-truss:', (kTrussValues));
+
+      for (const [nodeId, kCoreValue] of Object.entries(polyData)) {
+          if (!kCoreGroups[kCoreValue]) {
+              kCoreGroups[kCoreValue] = [];
+          }
+          kCoreGroups[kCoreValue].push(nodeId);
       }
+      
+      console.log('K-Core Groups:', kCoreGroups);
+      svg.selectAll("polygon").remove();
+      
+      // Example data for nodes
+      const Nodes = [
+        { id: '1', x: 3.021765595973074, y: 18.073275578813327 },
+        { id: '2', x: -21.75918442971135, y: 24.670133195397504 },
+        { id: '3', x: -36.75710136038725, y: 4.776538220080516 },
+        { id: '4', x: -23.715030066255128, y: -20.639036005903513 },
+        { id: '5', x: 9.204965629955444, y: -6.734875563010938 },
+        {id: '6', x: 80.88150046344202, y: 38.588511469007194},
+        {id: '7', x: 100.80644900691007, y: 18.91202835365013},
+        {id: '8', x: 78.80826366218396, y: -1.8733103712095256},
+        {id: '9', x: 49.25222669262313, y: 20.489801175976858}
+      ];
+
+    // Assuming nodeIds is an array of IDs for the nodes you want to include in the polygon
+    const nodeIds = ['1','2','3','4','5', '6', '7', '8', '9'];	
+
+    // Draw polygon for each k-core group
+    const finalPositions = nodeIds.map(id => {
+      const node = Nodes.find(n => n.id === id);
+      return node ? { x: node.x, y: node.y } : null;
+    }).filter(Boolean);
+
+    const points = finalPositions.map(node => [node.x, node.y]);
+    const hull = d3.polygonHull(points);
+
+    // Ensure the points are formatted correctly for the polygon
+    const pointsAttribute = hull.map(point => point.join(',')).join(' ');
+
+    svg.append("polygon")
+      .attr("points", pointsAttribute)
+      .attr("fill", 'rgba(255, 153, 204, 0.5)')
+      .attr("stroke", "none")
+      .attr("stroke-width", 2);
+
+      svg.append("polygon")
+      .attr("points","9.204965629955444,-6.734875563010938 -23.715030066255128,-20.639036005903513 -36.75710136038725,4.776538220080516 -21.75918442971135,24.670133195397504 3.021765595973074,18.073275578813327")
+      .attr("fill", 'rgba(255, 51, 102, 0.5)')
+      .attr("stroke", "none")
+      .attr("stroke-width", 2);
+  }
+
+    function dragstarted(event) {
+      if (!event.active) simulation.alphaTarget(0.3).restart();
+      event.subject.fx = event.subject.x;
+      event.subject.fy = event.subject.y;
+    }
+  
+    // Update the subject (dragged node) position during drag.
+    function dragged(event) {
+      event.subject.fx = event.x;
+      event.subject.fy = event.y;
+    }
+  
+    // Restore the target alpha so the simulation cools after dragging ends.
+    // Unfix the subject position now that it’s no longer being dragged.
+    function dragended(event) {
+      if (!event.active) simulation.alphaTarget(0);
+      event.subject.fx = null;
+      event.subject.fy = null;
+    }
+
+    // Cleanup function to stop the simulation when the component unmounts or updates.
+    return () => {
+      simulation.stop();
+    };
+  }, [Nodes, Links, kCoreValues]);
+
+    // Function to remove all SVG elements
+    const clearSvg = () => {
+      d3.select(svgRef.current).selectAll("*").remove();
     };
 
-  }, [nodes, edges]);
+    const exportSvg = () => {
+      const svgElement = svgRef.current;
+      if (svgElement) {
+          const svgData = new XMLSerializer().serializeToString(svgElement);
+          const blob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
+          const url = URL.createObjectURL(blob);
 
-  const addEdgesFromInput = () => {
-    const edgeLines = edgeList.split('\n').filter(line => line.trim() !== '');
-    const newEdges = [];
-    edgeLines.forEach(line => {
-      const [source, target] = line.split(',').map(node => node.trim());
-      if (source && target) {
-        newEdges.push({ source, target });
+          const link = document.createElement('a');
+          link.href = url;
+          link.download = 'graph.svg'; // Specify the filename
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          URL.revokeObjectURL(url); // Clean up the URL object
       }
-    });
-    setEdges(prevEdges => [...prevEdges, ...newEdges]);
+
+    }
+
+    const exportKCore = async () => {
+      setLoading(true);
+      try {
+          const response = await fetch('http://localhost:8000/get_current_graph', {
+              method: 'GET',
+              headers: {
+                  'Content-Type': 'application/json'
+              },
+          });
+  
+          if (!response.ok) {
+              throw new Error(`Failed to fetch graph data: ${response.status}`);
+          }
+  
+          const data = await response.json();
+
+          const fileData = JSON.stringify(data, null, 2);
+          const blob = new Blob([fileData], { type: 'application/json' });
+          const link = document.createElement('a');
+          link.href = URL.createObjectURL(blob);
+          link.download = 'graph_data.json';
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          URL.revokeObjectURL(link.href);
+  
+      } catch (error) {
+          console.error('Failed to fetch graph data:', error);
+          alert('Failed to fetch graph data. See console for details.');
+      } finally {
+          setLoading(false);
+      }
   };
 
   return (
     <div>
-      <div className="flex flex-col mb-4">
-        <Label htmlFor="edgeList">Input Edge List</Label>
-        <Textarea 
-          className="h-[100%] w-[40%]" 
-          style={{ resize: 'none' }} 
-          value={edgeList}
-          onChange={e => setEdgeList(e.target.value)}
-        />
-        <Button 
-          className="mt-3"
-          onClick={addEdgesFromInput}
-        >Upload Edge List</Button>
-      </div>
-      <svg ref={svgRef} style={{ width: '1000px', height: '1000px' }} />
+      <div className="flex flex-row mb-4 justify-center">
+      <div className="flex justify-center">
+      <div className="flex justify-center">
+      <Menubar className="bg-white">
+      <MenubarMenu>
+          <MenubarTrigger
+            className="hover:bg-gray-200 transition-colors duration-200"
+            onClick={() => setVisualizationState('k-core')}
+          >
+            K-Core
+          </MenubarTrigger>
+        </MenubarMenu>
+        <MenubarMenu>
+          <MenubarTrigger
+            className="hover:bg-gray-200 transition-colors duration-200"
+            onClick={() => setVisualizationState('k-clique')}
+          >
+            K Clique
+          </MenubarTrigger>
+        </MenubarMenu>
+        <MenubarMenu>
+          <MenubarTrigger
+            className="hover:bg-gray-200 transition-colors duration-200"
+            onClick={() => setVisualizationState('k-truss')}
+          >
+            K Truss
+          </MenubarTrigger>
+        </MenubarMenu>
+      </Menubar>
     </div>
+    </div>
+        </div>
+      <div className="flex flex-row mb-4 justify-center"> 
+      <div className="flex flex-col mb-2">
+            <div className="flex flex-row mb-2">
+                <div className="mr-2">
+                    <Label htmlFor="addEdgeSource" className="ml-1 text-md">Source Node:</Label>
+                    <Input
+                        id="addEdgeSource"
+                        type="text"
+                        placeholder="Source node"
+                        value={addEdgeSource}
+                        style={{ width: '100%' }}
+                        onChange={e => setAddEdgeSource(e.target.value)}
+                    />
+                </div>
+                <div className="mr-2 ">
+                    <Label htmlFor="addEdgeTarget" className="ml-1 text-md">Edge Target:</Label>
+                    <Input
+                        id="addEdgeTarget"
+                        type="text"
+                        placeholder="Target node"
+                        value={addEdgeTarget}
+                        style={{ width: '100%' }}
+                        onChange={e => setAddEdgeTarget(e.target.value)}
+                    />
+                </div>
+                <div className="flex pt-4">
+                    <Button 
+                        onClick={() => addEdge(addEdgeSource, addEdgeTarget)} 
+                        className="mt-2 text-md"
+                    > Add Edge </Button>
+                </div>
+            </div>
+            <div className="flex flex-row mb-2">
+                <div className="mr-2">
+                    <Label htmlFor="deleteEdgeSource" className="ml-1 text-md">Source Node:</Label>
+                    <Input
+                        id="deleteEdgeSource"
+                        type="text"
+                        placeholder="Source node"
+                        value={deleteEdgeSource}
+                        style={{ width: '100%' }}
+                        onChange={e => setDeleteEdgeSource(e.target.value)}
+                    />
+                </div>
+                <div className="mr-2">
+                    <Label htmlFor="deleteEdgeTarget" className="ml-1 text-md">Edge Target:</Label>
+                    <Input
+                        id="deleteEdgeTarget"
+                        type="text"
+                        placeholder="Target node"
+                        value={deleteEdgeTarget}
+                        style={{ width: '100%' }} // Set width to 100%
+                        onChange={e => setDeleteEdgeTarget(e.target.value)}
+                    />
+                </div>
+                <div className="flex pt-4">
+                    <Button 
+                        onClick={() => deleteEdge(deleteEdgeSource, deleteEdgeTarget)} 
+                        className="mt-2 text-md"
+                    >
+                        Delete Edge
+                    </Button>
+                </div>
+            </div>
+            <div className="flex flex-col">
+                <div className="flex mr-2 mb-2 mt-2">
+                <Label htmlFor="deleteNodeId" className="text-md">Delete Node:</Label>
+                </div>
+                <div className="flex flex-row mb-2">
+                      <Input
+                        id="deleteNodeId"
+                        type="text"
+                        placeholder="Enter node ID to delete"
+                        value={deleteNodeId}
+                        onChange={e => setDeleteNodeId(e.target.value)}
+                        style={{ width: '100%' }} // Set width to 50%
+                        className="mr-2" // Keep any additional styles
+                      />
+                      <Button className="text-md" onClick={() => deleteNode(deleteNodeId)}>Delete Node</Button>
+                </div>  
+            </div>
+      </div>
+
+      <div className="flex flex-col ml-20 mt-3">
+      <div className="flex-1 ">
+        <div className="mt-3 mb-2">
+        <Button onClick={handleButtonClick} className="mr-2 mb-2 text-md">Upload Graph</Button>
+        <Button onClick={clearSvg} className="mr-2 mb-2 text-md">Clear Graph</Button>
+        <Button onClick={exportSvg} className="mr-2 mb-2 text-md">Export Graph</Button>
+        <Button onClick={exportKCore} className="mr-2 mb-2 text-md">Export Graph Data</Button>
+        <input
+          type="file"
+          accept=".txt" // or the appropriate file types
+          onChange={handleFileUpload}
+          ref = {fileInputRef}
+          style={{ display: 'none' }} // Hide the file input
+        />
+        </div>
+          <div className="mb-4">
+            <h1 className="font-bold mt-4 mb-2 text-lg">Sample Graphs</h1>
+            <ToggleGroup type="single" defaultValue= {selectedValue} onValueChange={handleValueChange}>
+              <ToggleGroupItem value="1" className ="text-lg font-medium">Small</ToggleGroupItem>
+              <ToggleGroupItem value="2" className="text-lg font-semibold">Medium</ToggleGroupItem>
+              <ToggleGroupItem value="3" className="text-lg font-extrabold">Large</ToggleGroupItem>
+            </ToggleGroup>
+
+        </div>
+        <div>
+        <div>
+        {visualizationState === 'k-core' && (
+          <>
+            <h1 className="font-bold mt-4 mb-1 text-lg">Select K-Core Value</h1>
+            <ToggleGroup type="single" defaultValue={selectedKCore} onValueChange={handleKCoreChange}>
+              {kCoreValuesArray.map(value => (
+                <ToggleGroupItem key={value} value={value} className="text-lg">
+                  {value}-core
+                </ToggleGroupItem>
+              ))}
+            </ToggleGroup>
+          </>
+        )}
+
+        {visualizationState === 'k-clique' && (
+                <>
+                  <h1 className="font-bold mt-4 mb-1 text-lg">Select K-Clique Value</h1>
+                  <ToggleGroup type="single" defaultValue={selectedKclique} onValueChange={handleKCliqueChange}>
+                    {kCliqueValuesArray.map(value => (
+                      <ToggleGroupItem key={value} value={value} className="text-lg">
+                        {value}-Clique
+                      </ToggleGroupItem>
+                    ))}
+                  </ToggleGroup>
+                </>
+              )}
+
+        {visualizationState === 'k-truss' && (
+                <>
+                  <h1 className="font-bold mt-4 mb-1 text-lg">Select K-Truss Value</h1>
+                  <ToggleGroup type="single" defaultValue={selectedKtruss} onValueChange={handleKTrussChange}>
+                    {kTrussValuesArray.map(value => (
+                      <ToggleGroupItem key={value} value={value} className="text-lg">
+                        {value}-Truss
+                      </ToggleGroupItem>
+                    ))}
+                  </ToggleGroup>
+                </>
+              )}
+              </div>
+        </div>
+    </div>
+    </div>
+        
+    </div>
+
+    <div className="flex-1 mr-1">
+        <svg ref={svgRef} style={{ width: '300', height: '300' }} />
+    </div>
+  </div>
   );
 }
