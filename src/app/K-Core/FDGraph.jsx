@@ -33,7 +33,7 @@ export default function ForceDirectedGraph() {
   const [selectedKclique, setSelectedKclique] = useState('1');
   const [selectedKtruss, setSelectedKtruss] = useState('1');
   const [kclickState, setKclickState] = useState(0);
-
+  const [kTrussState, setKTrussState] = useState(0);
 
   // Upload Graph data
   const postGraphData = async (edges) => {
@@ -90,20 +90,18 @@ export default function ForceDirectedGraph() {
     };
 
     const getColorForKCoreValue = (kCoreValue) => {
-        return colorMapping[kCoreValue] || '#FFFFFF'; // Fallback to white if the k-core value is not defined
+        return colorMapping[kCoreValue] || '#FFFFFF';
     };
 
-    // Create an array of unique nodes based on the highest k-core value
     const nodes = Array.from(nodesSet).map(id => {
-        const kCoreValue = nodeCoreMap.get(id) || 0; // Get k-core value or default to 0
+        const kCoreValue = nodeCoreMap.get(id) || 0;
         return {
             id: String(id),
-            group: String.fromCharCode(65 + Math.min(kCoreValue, 4)), // Group A-E
-            color: getColorForKCoreValue(kCoreValue) // Assign color based on k-core value
+            group: String.fromCharCode(65 + Math.min(kCoreValue, 4)),
+            color: getColorForKCoreValue(kCoreValue) 
         };
     });
 
-    // Extract edges from kCoreData for uploading
     const edgesToUpload = [];
     Object.values(kCoreData).forEach(({ edges }) => {
         edges.forEach(([source, target]) => {
@@ -130,8 +128,7 @@ export default function ForceDirectedGraph() {
             body: JSON.stringify(newEdge),
         });
         const data = await response.json();
-        const kCoreData = data.core_data; // Assuming your API returns the updated k-core data
-        // console.log('Updated core data:', kCoreData);
+        const kCoreData = data.core_data;
         processKCoreData(kCoreData)  
     } catch (error) {
         alert(`Error adding edge: ${error.message}`);
@@ -151,7 +148,7 @@ export default function ForceDirectedGraph() {
             body: JSON.stringify(newEdge),
         });
         const data = await response.json();
-        const kCoreData = data.core_data; // Assuming your API returns the updated k-core data
+        const kCoreData = data.core_data;
         processKCoreData(kCoreData)
     } catch (error) {
         alert(`Error adding edge: ${error.message}`);
@@ -176,7 +173,7 @@ export default function ForceDirectedGraph() {
         }
 
         const data = await response.json();
-        const kCoreData = data.core_data; // Assuming your API returns the updated k-core data
+        const kCoreData = data.core_data;
         processKCoreData(kCoreData)
     } catch (error) {
         alert(`Error deleting node: ${error.message}`);
@@ -275,9 +272,7 @@ export default function ForceDirectedGraph() {
       console.log('Max K-Truss:', maxKtruss);
       setMaxKCore(maxKCore);
       setKCliqueValues(data.clique_data);
-      // console.log('K-Clique Values:', data.clique_data);
       setKTrussValues(data.truss_data);
-      // console.log('K-Truss Values:', data.truss_data);
       
   
     }
@@ -305,10 +300,11 @@ export default function ForceDirectedGraph() {
   
   const handleKCoreChange = async (value) => {
     setVisualizationState('k-core');
+    if (value){
     // currentGraphData();
     setSelectedKCore(value);
     // console.log('Selected K-Core:', value);
-    dynamicGraph(value);
+    dynamicGraph(value);}
   }
 
   const formatKCliqueData = (kCoreValues) => {
@@ -328,9 +324,27 @@ export default function ForceDirectedGraph() {
       });
     return formattedData;
   };
+  const formatKTrussData = (kCoreValues) => {
+    const formattedData = {};
+    Object.entries(kCoreValues).forEach(([kTrussValue, nodeIds]) => {
+        const numericKTrussValue = Number(kTrussValue);
+        console.log(`Processing kTrussValue: ${kTrussValue}`, nodeIds);
+        if (Array.isArray(nodeIds)) {
+            nodeIds.forEach(id => {
+                if (!formattedData[id] || formattedData[id] < numericKTrussValue) {
+                    formattedData[id] = numericKTrussValue;
+                }
+            });
+        } else {
+            console.warn(`Warning: nodeIds is not an array for kCliqueValue ${kCliqueValue}`, nodeIds);
+        }
+      });
+    return formattedData;
+  };
   
   const kCliqueValueChange = async (value) => {
     const filterData = (data, threshold) => {
+      console.log('Filtering data:', data);
       return Object.fromEntries(
         Object.entries(data).filter(([key, val]) => val >= threshold)
       );
@@ -338,18 +352,23 @@ export default function ForceDirectedGraph() {
     };
     console.log('K-Clique Values to be formatted: ', kCliqueValues);
     const formattedkCliqueData = formatKCliqueData(kCliqueValues);
+    console.log('Formatted K-Clique Values:', formattedkCliqueData);
     const filteredValues = filterData(formattedkCliqueData, value); 
     console.log('filtered K-Clique Values:', filteredValues);
     setKCliqueValues(filteredValues);
-    setKclickState(1);
+    if(kclickState == 1){
+    setKclickState(0);}else{setKclickState(1);}
   }
 
   const handleKCliqueChange = async (value) => {
-    setVisualizationState('k-clique');
-    setSelectedKclique(value);
-    //refreshGraph();
     console.log('Selected K-Clique:', value);
-    kCliqueValueChange(value);
+    setVisualizationState('k-clique');
+    if (value){
+    setSelectedKclique(value);
+    console.log('Selected K-Clique:', value);
+  
+    //refreshGraph();
+    kCliqueValueChange(value);}
    
     // console.log('Selected K-Clique visualization:', visualizationState);
 
@@ -359,9 +378,10 @@ export default function ForceDirectedGraph() {
   
   const handleKTrussChange = async (value) => {
     setVisualizationState('k-truss'); 
-    setSelectedKclique(value);
+    if (value){
+    setSelectedKtruss(value);
     console.log('Selected K-Truss:', value);
-    kTrussValueChange(value);
+    kTrussValueChange(value);}
   }
 
   const kTrussValueChange = async (value) => {
@@ -371,8 +391,14 @@ export default function ForceDirectedGraph() {
         );
       
       };
-      console.log('K-Truss Values:', kTrussValues);
-      setKTrussValues(filterData(kTrussValues, value));
+      console.log('K-Truss Values to be formatted: ', kTrussState);
+      const formattedkTrussData = formatKTrussData(kCliqueValues);
+      console.log('Formatted K-Truss Values:', formattedkTrussData);
+      const filteredValues = filterData(formattedkTrussData, value); 
+      console.log('filtered K-Clique Values:', filteredValues);
+      setKTrussValues(filteredValues);
+      if(kTrussState == 1){
+      setKTrussState(0);}else{setKTrussState(1);}
   }
 
   const processKCorePolygonData = (value) =>{
@@ -459,8 +485,7 @@ export default function ForceDirectedGraph() {
       )
       .force("charge", d3.forceManyBody().strength(-50))
       .force("center", d3.forceCenter(0, 0)); 
-  
-    // Create the SVG container and set dimensions.
+
     const svg = d3.select(svgRef.current)
       .attr("width", width)
       .attr("height", height)
@@ -468,10 +493,8 @@ export default function ForceDirectedGraph() {
       .attr("style", "max-width: auto; height: auto;")
       .attr("class", "responsive-svg");
   
-    // Remove all existing elements in the SVG container.
     svg.selectAll("*").remove();
   
-    // Add lines for links and circles for nodes.
     const link = svg.append("g")
       .attr("stroke", "#999")
       .attr("stroke-opacity", 1)
@@ -497,7 +520,6 @@ export default function ForceDirectedGraph() {
     node.append("title")
       .text(d => d.id);
   
-    // Set the position attributes of links and nodes each time the simulation ticks.
     simulation.on("tick", () => {
       link
         .attr("x1", d => d.source.x)
@@ -513,10 +535,9 @@ export default function ForceDirectedGraph() {
     simulation.on("end", () => {
       const finalPositions = Nodes.map(n => ({ id: n.id, x: n.x, y: n.y }));
       console.log("Final node positions:", finalPositions);
-      drawPolygons(finalPositions); // Call the function to draw the polygon with final positions
+      drawPolygons(finalPositions);
     });
 
-  
     const drawPolygons = () => {
       refreshGraph();
       let polyData = {};
@@ -532,47 +553,32 @@ export default function ForceDirectedGraph() {
     
         case 'k-clique':
             polyData = processKCorePolygonData(kCliqueValues);
-            console.log('Polygon k-clique');
             break;
     
         case 'k-truss':
-            polyData = kTrussValues;
-            console.log('Polygon k-truss');
+            polyData = processKCorePolygonData(kTrussValues);
             break;
 
         default:
-            polyData = kCoreValues;
-            console.log('Defaulted');
+            polyData = processKCorePolygonData(kCoreValues);
+            break
     }
-
-    console.log('Polygon k-clique:', kCliqueValues);
-    console.log('Polygon k-truss:', kTrussValues);
-
-      // for (const [nodeId, kCoreValue] of Object.entries(polyData)) {
-      //     if (!kCoreGroups[kCoreValue]) {
-      //         kCoreGroups[kCoreValue] = [];
-      //     }
-      //     kCoreGroups[kCoreValue].push(nodeId);
-      // }
-      
-      console.log('PolyData', polyData);
+      //Remove any previous Polygons
       svg.selectAll("polygon").remove();
       
-      // Draw polygon for each k group
-      for (const [kCoreValue, nodeIds] of Object.entries(polyData)) {
-        // console.log('K-Core Value:', kCoreValue, 'Node IDs:', nodeIds);
+      // Polygon for each k group
+      for (const [kValue, nodeIds] of Object.entries(polyData)) {
         const finalPositions = nodeIds.map(id => {
               const node = Nodes.find(n => n.id === id);
               return node ? { x: node.x, y: node.y } : null;
           }).filter(Boolean);
-          console.log('Final Positions:', finalPositions);
 
           if (finalPositions.length > 2) {
               const points = finalPositions.map(node => [node.x, node.y]);
               const hull = d3.polygonHull(points);
               
               if (hull) {
-                // console.log('Hull:', hull);
+                  // hardcoding colors for now
                   const colorMapping = {
                     1: 'rgba(255, 204, 204, 0.5)', // Very light pink
                     2: 'rgba(255, 153, 204, 0.5)', // Light pink
@@ -587,8 +593,7 @@ export default function ForceDirectedGraph() {
                     11: 'rgba(255, 51, 102, 0.5)'   // Dark rose
                   };
 
-                  // console.log('Selected Color Mapping', colorMapping[kCoreValue]);
-                  const fillColor = colorMapping[kCoreValue];
+                  const fillColor = colorMapping[kValue];
                   svg.append("polygon")
                       .datum(hull)
                       .attr("points", d => d.map(point => point.join(",")).join(" "))
@@ -609,14 +614,11 @@ export default function ForceDirectedGraph() {
       event.subject.fy = event.subject.y;
     }
   
-    // Update the subject (dragged node) position during drag.
     function dragged(event) {
       event.subject.fx = event.x;
       event.subject.fy = event.y;
     }
   
-    // Restore the target alpha so the simulation cools after dragging ends.
-    // Unfix the subject position now that it’s no longer being dragged.
     function dragended(event) {
 
       if (!event.active) simulation.alphaTarget(0);
@@ -624,13 +626,11 @@ export default function ForceDirectedGraph() {
       event.subject.fy = null;
     }
 
-    // Cleanup function to stop the simulation when the component unmounts or updates.
     return () => {
       simulation.stop();
     };
-  }, [Nodes, Links, visualizationState, kclickState]);
+  }, [Nodes, Links, visualizationState, kclickState, kTrussState]);
 
-    // Function to remove all SVG elements
     const clearSvg = () => {
       d3.select(svgRef.current).selectAll("*").remove();
     };
