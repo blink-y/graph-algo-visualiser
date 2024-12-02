@@ -147,25 +147,35 @@ def find_kclique_communities(graph, k, cliques=None):
             merged = frozenset().union(*(clique_sets[idx] for idx in component))
             yield merged
 
+# def get_kclique(edges):
+#     G = generate_graph(edges)
+    
+#     clique_nodes = {}
+#     k = 2    
+
+#     while True:
+#         c = list(find_kclique_communities(G, k, nx.find_cliques(G)))
+#         if not c:  # Check if c is empty
+#             break
+            
+#         # Convert frozenset to list
+#         k_clique_nodes = list(c[0])
+#         k_clique_nodes.sort()  # Sort the list if needed
+        
+#         clique_nodes[k] = k_clique_nodes
+#         k += 1
+        
+#     return clique_nodes
+
 def get_kclique(edges):
     G = generate_graph(edges)
+    cliques_by_size = defaultdict(set)  # Using set instead of list for unique nodes
     
-    clique_nodes = {}
-    k = 2    
-
-    while True:
-        c = list(find_kclique_communities(G, k))
-        if not c:  # Check if c is empty
-            break
-            
-        # Convert frozenset to list
-        k_clique_nodes = list(c[0])
-        k_clique_nodes.sort()  # Sort the list if needed
-        
-        clique_nodes[k] = k_clique_nodes
-        k += 1
-        
-    return clique_nodes
+    for clique in nx.enumerate_all_cliques(G):
+        cliques_by_size[len(clique)].update(clique)
+    
+    # Convert sets to sorted lists for cleaner output
+    return {k: sorted(v) for k, v in cliques_by_size.items()}
 
 def k_truss(G, k):
     # Create a working copy
@@ -231,22 +241,24 @@ def get_ktruss(edges):
 
 def main():
     edges = [
-    [1, 2], [1, 4], [1, 7], [1, 14], [1, 20], [2, 3], [2, 5], [2, 7], [2, 13],
-    [3, 8], [3, 9], [4, 5], [4, 7], [5, 4], [5, 6], [5, 7], [6, 8], [6, 11],
-    [6, 12], [7, 8], [8, 10], [15, 17], [16, 17], [17, 18], [17, 19], [18, 20], 
-    [19, 20]
-    ]
+        [1, 5], [1, 2], [1, 3], [1, 4], [2, 3], [2, 4], [2, 5],
+        [3, 4], [3, 5], [4, 5], [6, 7], [6, 8], [6, 9], [7, 8],
+        [7, 9], [8, 9], [1, 9], [1, 11], [2, 11], [2, 12], [3, 12],
+        [3, 13], [4, 16], [5, 9], [5, 14], [5, 15], [5, 15], [6, 10],
+        [8, 15], [9, 10], [10, 11], [12, 13], [14, 15], [16, 17],
+        [16, 18], [17, 18], [7, 23], [10, 24], [10, 25], [11, 26],
+        [11, 27], [12, 28], [12, 29], [13, 30], [17, 20], [18, 19], 
+        [15, 21], [15, 22]
+        ]
     
-    core_nodes = run_all_kcores(edges)
-    print(core_nodes)
+    # core_nodes = run_all_kcores(edges)
+    # print(core_nodes)
     
     clique_nodes = get_kclique(edges)
     print(clique_nodes)
     
-    truss_nodes = get_ktruss(edges)
-    print(truss_nodes)
-    
-    return core_nodes
+    # truss_nodes = get_ktruss(edges)
+    # print(truss_nodes)
 
 if __name__ == '__main__':
     main()
