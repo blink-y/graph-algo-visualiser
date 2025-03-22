@@ -67,9 +67,10 @@ async def initialize_graph(value: Value):
     else:
         raise HTTPException(status_code=400, detail="Invalid value. Please use 1, 2, or 3.")
     
-    # Initialize the timeline with the initial graph
+    # Reset the timeline and initialize the graph
     TIMELINE = TimeLine()
     for edge in edges:
+        TIMELINE.graph.add_edge(edge[0], edge[1])  # Add all edges to the graph
         TIMELINE.add_change(1, edge[0], edge[1])  # Add all edges to the timeline
     
     # Compute core data
@@ -100,9 +101,19 @@ async def add_edge(edge_op: EdgeOperation):
     # Add the new edge to the timeline
     TIMELINE.add_change(1, edge_op.source, edge_op.target)
     
-    # Compute core data for the updated graph
-    core_data = graph_utils.run_all_kcores(list(TIMELINE.graph.edges()))
-    return AlgorithmsResponse(core_data=core_data, timeline=TIMELINE.root.to_dict())
+    # Get the affected region (neighboring nodes)
+    G = graph_utils.generate_graph(list(TIMELINE.graph.edges()))
+    affected_subgraph = graph_utils.get_affected_region(G, edge=(edge_op.source, edge_op.target))
+    affected_nodes = set(affected_subgraph.nodes())
+    
+    # Recalculate k-core for the affected region
+    local_edges = list(affected_subgraph.edges())
+    local_core_data = graph_utils.run_all_kcores(local_edges)
+    
+    # Compute the global core data
+    global_core_data = graph_utils.run_all_kcores(list(TIMELINE.graph.edges()))
+    
+    return AlgorithmsResponse(core_data=global_core_data, timeline=TIMELINE.root.to_dict())
 
 @app.post("/remove_node", response_model=AlgorithmsResponse)
 async def remove_node(node_op: NodeOperation):
@@ -113,9 +124,21 @@ async def remove_node(node_op: NodeOperation):
     for edge in edges_to_remove:
         TIMELINE.add_change(0, edge[0], edge[1])  # Remove each edge
     
-    # Compute core data for the updated graph
-    core_data = graph_utils.run_all_kcores(list(TIMELINE.graph.edges()))
-    return AlgorithmsResponse(core_data=core_data, timeline=TIMELINE.root.to_dict())
+    # Get the affected region (neighboring nodes)
+    G = graph_utils.generate_graph(list(TIMELINE.graph.edges()))
+    affected_nodes = set()
+    for edge in edges_to_remove:
+        affected_subgraph = graph_utils.get_affected_region(G, edge=edge)
+        affected_nodes.update(set(affected_subgraph.nodes()))
+    
+    # Recalculate k-core for the affected region
+    local_edges = list(G.subgraph(affected_nodes).edges())
+    local_core_data = graph_utils.run_all_kcores(local_edges)
+    
+    # Compute the global core data
+    global_core_data = graph_utils.run_all_kcores(list(TIMELINE.graph.edges()))
+    
+    return AlgorithmsResponse(core_data=global_core_data, timeline=TIMELINE.root.to_dict())
 
 @app.post("/remove_edge", response_model=AlgorithmsResponse)
 async def remove_edge(edge_op: EdgeOperation):
@@ -124,9 +147,19 @@ async def remove_edge(edge_op: EdgeOperation):
     # Remove the edge from the timeline
     TIMELINE.add_change(0, edge_op.source, edge_op.target)
     
-    # Compute core data for the updated graph
-    core_data = graph_utils.run_all_kcores(list(TIMELINE.graph.edges()))
-    return AlgorithmsResponse(core_data=core_data, timeline=TIMELINE.root.to_dict())
+    # Get the affected region (neighboring nodes)
+    G = graph_utils.generate_graph(list(TIMELINE.graph.edges()))
+    affected_subgraph = graph_utils.get_affected_region(G, edge=(edge_op.source, edge_op.target))
+    affected_nodes = set(affected_subgraph.nodes())
+    
+    # Recalculate k-core for the affected region
+    local_edges = list(affected_subgraph.edges())
+    local_core_data = graph_utils.run_all_kcores(local_edges)
+    
+    # Compute the global core data
+    global_core_data = graph_utils.run_all_kcores(list(TIMELINE.graph.edges()))
+    
+    return AlgorithmsResponse(core_data=global_core_data, timeline=TIMELINE.root.to_dict())
 
 @app.get("/get_current_graph", response_model=AlgorithmsResponse)
 async def get_current_graph():
