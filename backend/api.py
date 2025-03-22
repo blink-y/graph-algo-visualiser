@@ -1,10 +1,9 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from matplotlib.tri import CubicTriInterpolator
 from pydantic import BaseModel
-from typing import Dict, List, Tuple, Union
+from typing import Dict, List, Tuple, Union, Optional
 import graph_utils
-import networkx as nx
+from timeline import TimeLine, TimeLineNode, find_node_by_id  # Import TimeLine and TimeLineNode
 
 app = FastAPI()
 
@@ -20,8 +19,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Global variable to store the current graph
-CURRENT_GRAPH = {"edges": []}
+# Global timeline object
+TIMELINE = TimeLine()
 
 class EdgeList(BaseModel):
     edges: List[List[int]]
@@ -39,15 +38,15 @@ class EdgeOperation(BaseModel):
 class CoreStructure(BaseModel):
     nodes: List[int]
     edges: List[Union[List[int], Tuple[int, int]]]
+    pruned_edges: List[Union[List[int], Tuple[int, int]]]  # New field for pruned edges
     
 class AlgorithmsResponse(BaseModel):
     core_data: Dict[int, CoreStructure]
-    clique_data: Dict[int, List[int]]
-    truss_data: Dict[int, List[int]]
-    
+    timeline: Optional[Dict] = None  # Timeline tree to send to frontend
+
 @app.post("/initialize_graph", response_model=AlgorithmsResponse)
 async def initialize_graph(value: Value):
-    global CURRENT_GRAPH
+    global TIMELINE
 
     if value.value == 1:
         edges = [[1,5], [1,2], [1,3], [1,4], [2,3], [2,4], [2,5], [3,4], [3,5], [4,5], 
@@ -68,104 +67,87 @@ async def initialize_graph(value: Value):
     else:
         raise HTTPException(status_code=400, detail="Invalid value. Please use 1, 2, or 3.")
     
-    # Store the current graph
-    CURRENT_GRAPH["edges"] = edges
-    core_data = graph_utils.run_all_kcores(CURRENT_GRAPH["edges"])
-    clique_data = graph_utils.get_kclique(CURRENT_GRAPH["edges"])
-    truss_data = graph_utils.get_ktruss(CURRENT_GRAPH["edges"])  
+    # Initialize the timeline with the initial graph
+    TIMELINE = TimeLine()
+    for edge in edges:
+        TIMELINE.add_change(1, edge[0], edge[1])  # Add all edges to the timeline
     
-    return AlgorithmsResponse(core_data=core_data, clique_data=clique_data, truss_data=truss_data)
+    # Compute core data
+    core_data = graph_utils.run_all_kcores(edges)
+    return AlgorithmsResponse(core_data=core_data, timeline=TIMELINE.root.to_dict())
 
 @app.post("/execute_algorithms", response_model=AlgorithmsResponse)
 async def calculate_k_cores(edge_list: EdgeList):
-    global CURRENT_GRAPH
+    global TIMELINE
 
     edges = edge_list.edges
     if not edges:
         raise HTTPException(status_code=400, detail="Edge list cannot be empty")
     
-    # Store the current graph
-    CURRENT_GRAPH["edges"] = edges
-    core_data = graph_utils.run_all_kcores(edges)
-    clique_data = graph_utils.get_kclique(edges)
-    truss_data = graph_utils.get_ktruss(edges)
+    # Reset the timeline with the new graph
+    TIMELINE = TimeLine()
+    for edge in edges:
+        TIMELINE.add_change(1, edge[0], edge[1])  # Add all edges to the timeline
     
-    return AlgorithmsResponse(core_data=core_data, clique_data=clique_data, truss_data=truss_data)
+    # Compute core data
+    core_data = graph_utils.run_all_kcores(edges)
+    return AlgorithmsResponse(core_data=core_data, timeline=TIMELINE.root.to_dict())
 
 @app.post("/add_edge", response_model=AlgorithmsResponse)
 async def add_edge(edge_op: EdgeOperation):
-    global CURRENT_GRAPH
+    global TIMELINE
 
-    if not CURRENT_GRAPH["edges"]:
-        CURRENT_GRAPH["edges"] = []
+    # Add the new edge to the timeline
+    TIMELINE.add_change(1, edge_op.source, edge_op.target)
     
-    new_edge = [edge_op.source, edge_op.target]
-    
-    # Check if the edge already exists
-    if new_edge not in CURRENT_GRAPH["edges"] and [edge_op.target, edge_op.source] not in CURRENT_GRAPH["edges"]:
-        CURRENT_GRAPH["edges"].append(new_edge)
-    
-    # Calculate new k-cores
-    core_data = graph_utils.run_all_kcores(CURRENT_GRAPH["edges"])
-    clique_data = graph_utils.get_kclique(CURRENT_GRAPH["edges"])
-    truss_data = graph_utils.get_ktruss(CURRENT_GRAPH["edges"])  
-    
-    return AlgorithmsResponse(core_data=core_data, clique_data=clique_data, truss_data=truss_data)
+    # Compute core data for the updated graph
+    core_data = graph_utils.run_all_kcores(list(TIMELINE.graph.edges()))
+    return AlgorithmsResponse(core_data=core_data, timeline=TIMELINE.root.to_dict())
 
 @app.post("/remove_node", response_model=AlgorithmsResponse)
 async def remove_node(node_op: NodeOperation):
-    global CURRENT_GRAPH
+    global TIMELINE
 
-    if not CURRENT_GRAPH["edges"]:
-        raise HTTPException(status_code=400, detail="No graph exists")
+    # Remove all edges connected to the node
+    edges_to_remove = [edge for edge in TIMELINE.graph.edges() if node_op.node in edge]
+    for edge in edges_to_remove:
+        TIMELINE.add_change(0, edge[0], edge[1])  # Remove each edge
     
-    # Create a new edge list excluding edges that contain the node to be removed
-    new_edges = [edge for edge in CURRENT_GRAPH["edges"] 
-                if node_op.node not in edge]
-    
-    # Update the current graph
-    CURRENT_GRAPH["edges"] = new_edges
-    
-    # Calculate new k-cores
-    core_data = graph_utils.run_all_kcores(new_edges)
-    clique_data = graph_utils.get_kclique(new_edges)
-    truss_data = graph_utils.get_ktruss(new_edges)  
-    
-    return AlgorithmsResponse(core_data=core_data, clique_data=clique_data, truss_data=truss_data)
+    # Compute core data for the updated graph
+    core_data = graph_utils.run_all_kcores(list(TIMELINE.graph.edges()))
+    return AlgorithmsResponse(core_data=core_data, timeline=TIMELINE.root.to_dict())
 
 @app.post("/remove_edge", response_model=AlgorithmsResponse)
 async def remove_edge(edge_op: EdgeOperation):
-    global CURRENT_GRAPH
+    global TIMELINE
 
-    if not CURRENT_GRAPH["edges"]:
-        raise HTTPException(status_code=400, detail="No graph exists")
+    # Remove the edge from the timeline
+    TIMELINE.add_change(0, edge_op.source, edge_op.target)
     
-    edge_to_remove = [edge_op.source, edge_op.target]
-    reverse_edge = [edge_op.target, edge_op.source]
-    
-    # Remove the edge if it exists
-    new_edges = [edge for edge in CURRENT_GRAPH["edges"] 
-                if edge != edge_to_remove and edge != reverse_edge]
-    
-    # Update the current graph
-    CURRENT_GRAPH["edges"] = new_edges
-    
-    # Calculate new k-cores
-    core_data = graph_utils.run_all_kcores(new_edges)
-    clique_data = graph_utils.get_kclique(new_edges)
-    truss_data = graph_utils.get_ktruss(new_edges)  
-    
-    return AlgorithmsResponse(core_data=core_data, clique_data=clique_data, truss_data=truss_data)
+    # Compute core data for the updated graph
+    core_data = graph_utils.run_all_kcores(list(TIMELINE.graph.edges()))
+    return AlgorithmsResponse(core_data=core_data, timeline=TIMELINE.root.to_dict())
 
 @app.get("/get_current_graph", response_model=AlgorithmsResponse)
 async def get_current_graph():
-    global CURRENT_GRAPH
+    global TIMELINE
 
-    if not CURRENT_GRAPH["edges"]:
-        raise HTTPException(status_code=400, detail="No graph exists")
+    # Compute core data for the current graph
+    core_data = graph_utils.run_all_kcores(list(TIMELINE.graph.edges()))
+    return AlgorithmsResponse(core_data=core_data, timeline=TIMELINE.root.to_dict())
+
+@app.post("/navigate_to_node", response_model=AlgorithmsResponse)
+async def navigate_to_node(node_id: int):
+    global TIMELINE
+
+    # Find the target node in the timeline (this is a placeholder; you'll need to implement node lookup)
+    target_node = find_node_by_id(TIMELINE.root, node_id)
+    if not target_node:
+        raise HTTPException(status_code=404, detail="Node not found")
     
-    core_data = graph_utils.run_all_kcores(CURRENT_GRAPH["edges"])
-    clique_data = graph_utils.get_kclique(CURRENT_GRAPH["edges"])
-    truss_data = graph_utils.get_ktruss(CURRENT_GRAPH["edges"])  
+    # Navigate to the target node
+    TIMELINE.navigate(target_node)
     
-    return AlgorithmsResponse(core_data=core_data, clique_data=clique_data, truss_data=truss_data)
+    # Compute core data for the graph at the target node
+    core_data = graph_utils.run_all_kcores(list(TIMELINE.graph.edges()))
+    return AlgorithmsResponse(core_data=core_data, timeline=TIMELINE.root.to_dict())

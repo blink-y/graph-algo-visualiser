@@ -1,16 +1,13 @@
 import networkx as nx
-import matplotlib.pyplot as plt
 from collections import defaultdict
 
 def generate_graph(edges):
     G = nx.Graph()
     G.add_edges_from(edges)
-    
     return G
 
 def get_core_number(G):
     degrees = dict(G.degree())
-    # Sort nodes by degree.
     nodes = sorted(degrees, key=degrees.get)
     bin_boundaries = [0]
     curr_degree = 0
@@ -19,7 +16,6 @@ def get_core_number(G):
             bin_boundaries.extend([i] * (degrees[v] - curr_degree))
             curr_degree = degrees[v]
     node_pos = {v: pos for pos, v in enumerate(nodes)}
-    # The initial guess for the core number of a node is its degree.
     core = degrees
     nbrs = {v: list(nx.all_neighbors(G, v)) for v in G}
     for v in nodes:
@@ -43,39 +39,56 @@ def get_core_subgraph(G, k_filter, k=None, core=None):
     nodes = (v for v in core if k_filter(v, k, core))
     return G.subgraph(nodes).copy()
 
-
 def get_kcore(G, k=None, core_number=None):
     def k_filter(v, k, core):
         return core[v] >= k
 
     return get_core_subgraph(G, k_filter, k, core_number)
 
-def visualize_graph(G):
-    pos = nx.spring_layout(G, seed=42)
-    nx.draw(G, pos, with_labels=True, node_color='lightblue', edge_color='gray', node_size=500, font_size=10)
-    
-    plt.title("K-core of the Graph")
-    plt.show()
-
 def run_all_kcores(edges):
     G = generate_graph(edges)
     core_data = {}
-    k = 1    
+    pruning_data = {}  # To store nodes and edges pruned at each k
+    k = 1
 
     # Collect all k-cores
     while True:
         k_core = get_kcore(G, k)
         k_core_edges = k_core.edges()
-        
+
         if not k_core_edges:  # If there are no edges, break the loop
             break
-        
+
+        # Get the nodes in the current k-core
+        nodes_in_k_core = set(k_core.nodes())
+
+        # If k > 1, calculate the nodes and edges pruned from the previous k-core
+        if k > 1:
+            nodes_in_previous_core = core_data[k - 1]['nodes']
+            pruned_nodes = nodes_in_previous_core - nodes_in_k_core
+            pruned_edges = []
+
+            # Find edges that were removed during pruning
+            for node in pruned_nodes:
+                pruned_edges.extend([(node, neighbor) for neighbor in G.neighbors(node) if neighbor in nodes_in_previous_core])
+
+            pruning_data[k - 1] = {
+                'nodes': list(pruned_nodes),
+                'edges': list(set(pruned_edges))  # Remove duplicate edges
+            }
+
+        # Store the current k-core data
         core_data[k] = {
-            'nodes': set(k_core.nodes()),
-            'edges': set(frozenset((u,v)) for u,v in k_core_edges)
+            'nodes': nodes_in_k_core,
+            'edges': set(frozenset((u, v)) for u, v in k_core_edges),
+            'pruned_edges': pruning_data.get(k - 1, {'nodes': [], 'edges': []})  # Add pruned edges
         }
         k += 1
 
+    # Handle pruning for the last k-core (no higher core to compare with)
+    pruning_data[k - 1] = {'nodes': [], 'edges': []}  # No pruning for the highest k-core
+
+    # Finalize core data
     final_core_data = {}
     highest_core = k - 1
 
@@ -84,7 +97,8 @@ def run_all_kcores(edges):
             # For highest core, include all its nodes and edges
             final_core_data[current_k] = {
                 'nodes': list(core_data[current_k]['nodes']),
-                'edges': list(tuple(e) for e in core_data[current_k]['edges'])
+                'edges': list(tuple(e) for e in core_data[current_k]['edges']),
+                'pruned_edges': []  # No pruned edges for the highest core
             }
         else:
             # For other cores, only include nodes and edges unique to this core
@@ -101,164 +115,38 @@ def run_all_kcores(edges):
             else:
                 final_core_data[current_k] = {
                     'nodes': list(unique_nodes),
-                    'edges': list(tuple(e) for e in unique_edges)
+                    'edges': list(tuple(e) for e in unique_edges),
+                    'pruned_edges': pruning_data[current_k]['edges']  # Add pruned edges
                 }
 
+    # Return the final core data
     return final_core_data
 
-def find_kclique_communities(graph, k, cliques=None):
-    # Initialize or get cliques
-    if cliques is None:
-        cliques = list(nx.find_cliques(graph))
+def get_affected_region(G, node=None, edge=None, radius=2):
+    affected_nodes = set()
     
-    # Create sets of nodes for each clique meeting size requirement
-    clique_sets = {i: frozenset(c) for i, c in enumerate(cliques) if len(c) >= k}
-    if not clique_sets:
-        return
-        
-    # Build adjacency mapping of clique indices
-    adjacency_map = defaultdict(set)
-    clique_indices = list(clique_sets.keys())
+    if node is not None:
+        affected_nodes.update(nx.single_source_shortest_path_length(G, node, cutoff=radius))
     
-    # Compare each pair of cliques only once
-    for i in range(len(clique_indices)):
-        for j in range(i + 1, len(clique_indices)):
-            ci, cj = clique_indices[i], clique_indices[j]
-            # Check if cliques share k-1 nodes
-            if len(clique_sets[ci] & clique_sets[cj]) >= (k - 1):
-                adjacency_map[ci].add(cj)
-                adjacency_map[cj].add(ci)
+    elif edge is not None:
+        source, target = edge
+        affected_nodes.update(nx.single_source_shortest_path_length(G, source, cutoff=radius))
+        affected_nodes.update(nx.single_source_shortest_path_length(G, target, cutoff=radius))
     
-    # Find connected components using DFS
-    visited = set()
-    for clique_idx in clique_indices:
-        if clique_idx not in visited:
-            component = set()
-            stack = [clique_idx]
-            
-            while stack:
-                current = stack.pop()
-                if current not in visited:
-                    visited.add(current)
-                    component.add(current)
-                    stack.extend(n for n in adjacency_map[current] if n not in visited)
-            
-            # Merge all cliques in the component
-            merged = frozenset().union(*(clique_sets[idx] for idx in component))
-            yield merged
+    return G.subgraph(affected_nodes)
 
-# def get_kclique(edges):
-#     G = generate_graph(edges)
+def update_core_data(old_core_data, affected_nodes, new_local_core_data):
+    updated_core_data = dict(old_core_data)
     
-#     clique_nodes = {}
-#     k = 2    
-
-#     while True:
-#         c = list(find_kclique_communities(G, k, nx.find_cliques(G)))
-#         if not c:  # Check if c is empty
-#             break
-            
-#         # Convert frozenset to list
-#         k_clique_nodes = list(c[0])
-#         k_clique_nodes.sort()  # Sort the list if needed
-        
-#         clique_nodes[k] = k_clique_nodes
-#         k += 1
-        
-#     return clique_nodes
-
-def get_kclique(edges):
-    G = generate_graph(edges)
-    cliques_by_size = defaultdict(set)  # Using set instead of list for unique nodes
+    for k, data in updated_core_data.items():
+        data['nodes'] = [n for n in data['nodes'] if n not in affected_nodes]
+        data['edges'] = [e for e in data['edges'] if e[0] not in affected_nodes and e[1] not in affected_nodes]
     
-    for clique in nx.enumerate_all_cliques(G):
-        cliques_by_size[len(clique)].update(clique)
+    for k, data in new_local_core_data.items():
+        if k not in updated_core_data:
+            updated_core_data[k] = data
+        else:
+            updated_core_data[k]['nodes'].extend(data['nodes'])
+            updated_core_data[k]['edges'].extend(data['edges'])
     
-    # Convert sets to sorted lists for cleaner output
-    return {k: sorted(v) for k, v in cliques_by_size.items()}
-
-def k_truss(G, k):
-    # Create a working copy
-    subgraph = G.copy()
-    
-    def count_triangles(u, v):
-        # Count common neighbors (triangles) between two nodes
-        u_neighbors = set(subgraph.neighbors(u))
-        v_neighbors = set(subgraph.neighbors(v))
-        return len(u_neighbors & v_neighbors)
-    
-    def find_weak_edges():
-        # Find edges with insufficient triangle support
-        weak_edges = []
-        processed = set()
-        
-        for node in subgraph.nodes():
-            processed.add(node)
-            # Check only forward edges to avoid duplicates
-            neighbors = set(subgraph.neighbors(node)) - processed
-            
-            for neighbor in neighbors:
-                if count_triangles(node, neighbor) < (k - 2):
-                    weak_edges.append((node, neighbor))
-                    
-        return weak_edges
-    
-    while True:
-        # Find and remove edges with insufficient support
-        edges_to_remove = find_weak_edges()
-        if not edges_to_remove:
-            break
-            
-        # Remove weak edges
-        subgraph.remove_edges_from(edges_to_remove)
-        
-        # Clean up isolated nodes
-        isolated_nodes = [n for n in subgraph.nodes() if subgraph.degree(n) == 0]
-        subgraph.remove_nodes_from(isolated_nodes)
-        
-        # If graph is empty, break
-        if not subgraph.edges():
-            break
-    
-    return subgraph
-
-def get_ktruss(edges):
-    G = generate_graph(edges)
-    
-    truss_nodes = {}
-    k = 1
-    
-    while True:
-        k_truss_nodes = k_truss(G, k)
-        
-        if not k_truss_nodes:
-            break
-        
-        truss_nodes[k] = list(k_truss_nodes)
-        k += 1
-    
-    return truss_nodes
-
-def main():
-    edges = [
-        [1, 5], [1, 2], [1, 3], [1, 4], [2, 3], [2, 4], [2, 5],
-        [3, 4], [3, 5], [4, 5], [6, 7], [6, 8], [6, 9], [7, 8],
-        [7, 9], [8, 9], [1, 9], [1, 11], [2, 11], [2, 12], [3, 12],
-        [3, 13], [4, 16], [5, 9], [5, 14], [5, 15], [5, 15], [6, 10],
-        [8, 15], [9, 10], [10, 11], [12, 13], [14, 15], [16, 17],
-        [16, 18], [17, 18], [7, 23], [10, 24], [10, 25], [11, 26],
-        [11, 27], [12, 28], [12, 29], [13, 30], [17, 20], [18, 19], 
-        [15, 21], [15, 22]
-        ]
-    
-    # core_nodes = run_all_kcores(edges)
-    # print(core_nodes)
-    
-    clique_nodes = get_kclique(edges)
-    print(clique_nodes)
-    
-    # truss_nodes = get_ktruss(edges)
-    # print(truss_nodes)
-
-if __name__ == '__main__':
-    main()
+    return updated_core_data
