@@ -38,7 +38,7 @@ export default function ForceDirectedGraph() {
   // Upload Graph data
   const postGraphData = async (edges) => {
     try {
-      const response = await fetch('http://localhost:8000/calculate_k_cores', {
+      const response = await fetch('http://localhost:8000/execute_algorithms', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -449,12 +449,11 @@ export default function ForceDirectedGraph() {
         const reader = new FileReader();
         reader.onload = async (e) => {
             const content = e.target.result;
-            const edges = parseGraphData(content);
-            // console.log('Uploaded edges:', edges); // Log the uploaded edges
-            
+            const edges = newParseGraphData(content);
+            console.log('Parsed Uploaded Graph Data:', edges);
             // Send the uploaded graph data to the backend
             const kCoreData = await postGraphData(edges);
-            // console.log('Core meow:', kCoreData); // Log core nodes
+            console.log('Problem K-Core Data:', kCoreData);
             processKCoreData(kCoreData); // Process k-core data
         };
         reader.readAsText(file);
@@ -465,6 +464,15 @@ export default function ForceDirectedGraph() {
       const edgeLines = data.split('\n').filter(line => line.trim() !== '');
       const edges = edgeLines.map(line => {
         const [source, target] = line.split(',').map(node => node.trim());
+        return [Number(source), Number(target)]; // Convert to numbers and return as an array
+      });
+      return edges;
+    };
+
+    const newParseGraphData = (data) => {
+      const edgeLines = data.split('\n').filter(line => line.trim() !== '');
+      const edges = edgeLines.map(line => {
+        const [source, target] = line.split(' ').map(node => node.trim()); // Split by space instead of comma
         return [Number(source), Number(target)]; // Convert to numbers and return as an array
       });
       return edges;
@@ -481,9 +489,9 @@ export default function ForceDirectedGraph() {
     const simulation = d3.forceSimulation(Nodes)
       .force("link", d3.forceLink(Links)
         .id(d => d.id)
-        .strength(1)
+        .strength(0.1)
       )
-      .force("charge", d3.forceManyBody().strength(-50))
+      .force("charge", d3.forceManyBody().strength(-100))
       .force("center", d3.forceCenter(0, 0)); 
 
     const svg = d3.select(svgRef.current)
