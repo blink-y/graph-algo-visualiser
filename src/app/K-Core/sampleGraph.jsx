@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import * as d3 from 'd3';
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -10,14 +10,20 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 
 export default function SampleGraph() {
   const router = useRouter();
-  const svgRef = useRef(null);
-  const [nodes, setNodes] = useState([]);
-  const [links, setLinks] = useState([]);
   const [currentDatasetIndex, setCurrentDatasetIndex] = useState(0);
   const [isAutoUpdating, setIsAutoUpdating] = useState(false);
   const [datasets, setDatasets] = useState([]);
+  const svgRef = useRef(null);
   const simulationRef = useRef(null);
   const intervalRef = useRef(null);
+
+  //Graph State Management
+    // State management
+  const [nodes, setNodes] = useState([]);
+  const [links, setLinks] = useState([]);
+  const [isAutoPruning, setIsAutoPruning] = useState(false);
+  const [currentPruneStep, setCurrentPruneStep] = useState(0);
+  const [pruneQueue, setPruneQueue] = useState([]);
 
   // Graph Manipulation States
   const [selectedValue, setSelectedValue] = useState("1");
@@ -27,7 +33,424 @@ export default function SampleGraph() {
   const [deleteEdgeTarget, setDeleteEdgeTarget] = useState("");
   const [deleteNodeId, setDeleteNodeId] = useState("");
   const fileInputRef = useRef(null);
+  
+  // const updateGraph = (index) => {
+  
+  //   if (datasets.length === 0 || !datasets[index]) {
+  //     console.error("No dataset available at index:", index);
+  //     return;
+  //   }
 
+  //   console.log("Updating graph with dataset index:", index);
+  //   const { nodes: newNodes, links: newLinks } = datasets[index];
+  //   console.log("New nodes:", newNodes);
+  //   console.log("New links:", newLinks);
+    
+  //   // Create maps for quick lookup
+  //   const currentNodesMap = new Map(nodes.map(node => [node.id, node]));
+  //   const newNodesMap = new Map(newNodes.map(node => [node.id, node]));
+    
+  //   const currentLinksMap = new Map(links.map(link => [`${link.source.id}-${link.target.id}`, link]));
+  //   const newLinksMap = new Map(newLinks.map(link => [`${link.source}-${link.target}`, link]));
+    
+  //   // Determine nodes to add and remove
+  //   const nodesToAdd = [];
+  //   const nodesToRemove = [];
+    
+  //   // Check for nodes to add
+  //   for (const newNode of newNodes) {
+  //     if (!currentNodesMap.has(newNode.id)) {
+  //       nodesToAdd.push(newNode);
+  //     }
+  //   }
+
+  //   // Check for nodes to remove
+  //   for (const currentNode of nodes) {
+  //     if (!newNodesMap.has(currentNode.id)) {
+  //       nodesToRemove.push(currentNode);
+  //     }
+  //   }
+
+  //   // Determine links to add and remove
+  //   const linksToAdd = [];
+  //   const linksToRemove = [];
+
+  //   // Check for links to add
+  //   for (const newLink of newLinks) {
+  //     const linkKey = `${newLink.source}-${newLink.target}`;
+  //     if (!currentLinksMap.has(linkKey)) {
+  //       // Ensure source and target are node objects, not just IDs
+  //       const sourceNode = newNodes.find(node => node.id === newLink.source);
+  //       const targetNode = newNodes.find(node => node.id === newLink.target);
+  //       if (sourceNode && targetNode) {
+  //         linksToAdd.push({ source: sourceNode, target: targetNode });
+  //       }
+  //     }
+  //   }
+
+  //   // Check for links to remove
+  //   for (const currentLink of links) {
+  //     const linkKey = `${currentLink.source.id}-${currentLink.target.id}`;
+  //     if (!newLinksMap.has(linkKey)) {
+  //       linksToRemove.push(currentLink);
+  //     }
+  //   }
+
+  //   // Function to update nodes and links one at a time
+  //   const updateGraphElements = () => {
+  //     if (nodesToAdd.length > 0) {
+  //       // Add one node at a time
+  //       const nodeToAdd = nodesToAdd.shift();
+  //       setNodes(prevNodes => [...prevNodes, nodeToAdd]);
+  //       setTimeout(updateGraphElements, 500); // Delay between adding nodes (500ms)
+  //     } else if (nodesToRemove.length > 0) {
+  //       // Remove one node at a time
+  //       const nodeToRemove = nodesToRemove.shift();
+  //       setNodes(prevNodes => prevNodes.filter(node => node.id !== nodeToRemove.id));
+
+  //       // Remove any links connected to the removed node
+  //       setLinks(prevLinks => prevLinks.filter(link => 
+  //         link.source.id !== nodeToRemove.id && link.target.id !== nodeToRemove.id
+  //       ));
+
+  //       setTimeout(updateGraphElements, 500); // Delay between removing nodes (500ms)
+  //     } else if (linksToAdd.length > 0) {
+  //       // Add one link at a time
+  //       const linkToAdd = linksToAdd.shift();
+  //       setLinks(prevLinks => [...prevLinks, linkToAdd]);
+  //       setTimeout(updateGraphElements, 500); // Delay between adding links (500ms)
+  //     } else if (linksToRemove.length > 0) {
+  //       // Remove one link at a time
+  //       const linkToRemove = linksToRemove.shift();
+  //       setLinks(prevLinks => prevLinks.filter(link => 
+  //         link.source.id !== linkToRemove.source.id || link.target.id !== linkToRemove.target.id
+  //       ));
+  //       setTimeout(updateGraphElements, 500); // Delay between removing links (500ms)
+  //     }
+  //   };
+
+  //   // Start the update process
+  //   updateGraphElements();
+  // };
+
+  // Effect to handle auto-updating the graph
+
+
+    // Initialize graph and prune queue
+    useEffect(() => {
+      const loadData = async () => {
+        const response = await fetch('./api.json');
+        const data = await response.json();
+
+        const datasetOrder = Object.keys(data.core_data).map(Number).sort((a, b) => b - a).map(String);
+        
+        let allNodes = [];
+        let nodeDatasetMap = [];
+
+         // First pass: record which dataset each node belongs to
+        datasetOrder.forEach(key => {
+          data.core_data[key].nodes.forEach(id => {
+            // Nodes belong to the highest-numbered dataset they appear in
+            if (!nodeDatasetMap[id]) {
+              nodeDatasetMap[id] = key;
+            }
+          });
+        });
+
+        // Create nodes array with group information
+        Object.keys(nodeDatasetMap).forEach(id => {
+          allNodes.push({
+            id: id.toString(),
+            group: parseInt(nodeDatasetMap[id]), // Use dataset number as group
+            dataset: nodeDatasetMap[id] // Original dataset as string
+          });
+        });
+
+        let allEdges = [];
+        let allPruneSteps = [];
+        
+
+        datasetOrder.forEach(key => {
+          const dataset = data.core_data[key];
+          
+          // Only include NON-pruned edges in the main graph
+          const datasetEdges = dataset.edges.map(([source, target]) => ({
+            source: source.toString(),
+            target: target.toString(),
+            id: `${source}-${target}`,
+            dataset: key
+          }));
+        
+          allEdges = [...allEdges, ...datasetEdges];
+        
+          // Pruned edges go ONLY into the pruning queue
+          const pruneSteps = (dataset.pruned_edges || []).map(([s, t]) => `${s}-${t}`);
+          allPruneSteps = [...allPruneSteps, ...pruneSteps];
+        });
+
+        console.log("pruneSteps", allPruneSteps);
+    
+        setNodes(allNodes);
+        setLinks(allEdges);
+        setPruneQueue(allPruneSteps.reverse());
+      };
+      
+      loadData();
+    }, []);
+    
+    // Add this early in your component
+    useEffect(() => {
+      console.log("Initial pruneQueue:", pruneQueue);
+    }, []);
+
+    const pruneNextEdge = useCallback(() => {
+      console.log("--- Prune Start ---");
+      
+      // Use functional update to get the most current state
+      setCurrentPruneStep(currentStep => {
+        console.log("Current step:", currentStep, "Queue:", pruneQueue);
+    
+        if (currentStep >= pruneQueue.length) {
+          console.log("All edges pruned");
+          setIsAutoPruning(false);
+          return currentStep;
+        }
+    
+        let edgeId = pruneQueue[currentStep];
+        let edgeToRemove = links.find(link => link.id === edgeId);
+        
+        // If not found, check reverse direction
+        if (!edgeToRemove) {
+          const [sourceId, targetId] = edgeId.split('-');
+          const reverseEdgeId = `${targetId}-${sourceId}`;
+          edgeToRemove = links.find(link => link.id === reverseEdgeId);
+          
+          if (edgeToRemove) {
+            console.log(`Found reversed edge: ${reverseEdgeId}`);
+            edgeId = reverseEdgeId; // Update to use the reversed ID
+          } else {
+            console.log(`Edge ${edgeId} not found in either direction`);
+            return currentStep + 1;
+          }
+        }
+    
+        const { source, target } = edgeToRemove;
+        const newLinks = links.filter(link => link.id !== edgeId);
+        
+        console.log("Pruning edge:", source.id, target.id, edgeId);
+    
+        // Check if nodes become orphans
+        const isSourceOrphan = !newLinks.some(link => 
+          link.source.id === source.id || link.target.id === source.id
+        );
+        const isTargetOrphan = !newLinks.some(link => 
+          link.source.id === target.id || link.target.id === target.id
+        );
+    
+        console.log("Orphan status:", { isSourceOrphan, isTargetOrphan });
+    
+        // Flash and remove function
+        const flashThenRemove = (node, edgeId) => {
+          const nodeElement = d3.select(`circle[data-id="${node.id}"]`);
+          const edgeElement = d3.select(`line[data-id="${edgeId}"]`);
+          
+          // Flash animation
+          const flash = () => {
+            nodeElement
+              .transition().attr('r', 7).duration(100).attr('fill', 'red')
+              .transition().duration(100).attr('fill', 'black').on('end', flash);
+        
+            edgeElement
+              .transition().duration(100).style('stroke', 'red')
+              .transition().duration(100).style('stroke', 'black').on('end', flash);
+          };
+        
+          flash();
+        
+          setTimeout(() => {
+            nodeElement.interrupt()
+              .transition().duration(500)
+              .attr('r', 0).style('opacity', 0)
+              .remove();
+        
+            edgeElement.interrupt()
+              .transition().duration(500)
+              .style('stroke-opacity', 0)
+              .remove();
+          }, 1000);
+        };
+    
+        // Create new nodes array
+        let newNodes = [...nodes];
+        
+        if (isSourceOrphan) {
+          flashThenRemove(source, edgeId);
+          newNodes = newNodes.filter(node => node.id !== source.id);
+        } 
+    
+        if (isTargetOrphan) {
+          flashThenRemove(target, edgeId);
+          newNodes = newNodes.filter(node => node.id !== target.id);
+        }
+    
+        // Edge removal animation
+        d3.select(`line[data-id="${edgeId}"]`)
+          .interrupt()
+          .transition().duration(500)
+          .style('stroke', 'red')
+          .style('stroke-width', '3px')
+          .transition().duration(300)
+          .style('stroke-opacity', 0)
+          .style('stroke-width', '0px')
+          .remove();
+    
+        // Update state after animations complete
+        setTimeout(() => {
+          setLinks(newLinks);
+          setNodes(newNodes);
+          
+          if (simulationRef.current) {
+            simulationRef.current
+              .nodes(newNodes)
+              .force('link').links(newLinks);
+            simulationRef.current.alpha(0.5).restart();
+          }
+        }, 1500);
+    
+        return currentStep + 1;
+      });
+    }, [pruneQueue, links, nodes]);  // Dependencies
+
+    // Auto-prune effect
+    useEffect(() => {
+      let intervalId;
+      
+      if (isAutoPruning) {
+        intervalId = setInterval(pruneNextEdge, 1750);
+      }
+      
+      return () => {
+        if (intervalId) clearInterval(intervalId);
+      };
+    }, [isAutoPruning, currentPruneStep, links, nodes, pruneQueue.length]);
+
+  // Effect to render the graph when Nodes or Links change
+  useEffect(() => {
+    if (nodes.length === 0 || !svgRef.current)  return;
+    const   width = window.innerWidth;
+    const height = window.innerHeight;
+
+    const color = d3.scaleOrdinal(d3.schemeCategory10);
+    d3.select(svgRef.current).selectAll('*').remove();
+
+    if (!simulationRef.current) {
+      simulationRef.current = d3.forceSimulation()
+      .force('link', d3.forceLink()
+      .id(d => d.id)
+      .strength(link => {
+        // Stronger connections for same-group nodes
+        return link.source.group === link.target.group ? 1 : 0.4;
+      })
+    )
+    .force('charge', d3.forceManyBody().strength(-75))
+    .force('center', d3.forceCenter(width / 2, height / 2));
+      }
+      
+      const svg = d3.select(svgRef.current)
+      .attr('width', width)
+      .attr('height', height)
+      .attr('viewBox', [0, 0, width, height])
+      .attr('style', 'max-width: auto; height: auto;')
+      .attr('class', 'responsive-svg');
+      
+      svg.selectAll('*').remove();
+
+      const zoomableGroup = svg.append('g');
+
+      const zoom = d3.zoom()
+      .scaleExtent([0.1, 10])
+      .on('zoom', (event) => {
+        zoomableGroup.attr('transform', event.transform);
+      });
+
+    svg.call(zoom);
+
+    const link = zoomableGroup.append('g')
+    .attr('stroke', '#999')
+    .attr('stroke-opacity', 1)
+    .selectAll('line')
+    // .data(links, d => `${d.source}-${d.target}`)
+    // .attr('data-id', d =>`${d.source}-${d.target}`)
+    .data(links, d => d.id)
+    .attr('data-id', d => d.id)
+    .join('line')
+    .attr('stroke-width', 1.5)
+    .attr('x1', d => d.source.x)
+    .attr('y1', d => d.source.y)
+    .attr('x2', d => d.target.x)
+    .attr('y2', d => d.target.y);
+
+    const node = zoomableGroup.append('g')
+      .attr('stroke', '#fff')
+      .attr('stroke-width', 1.5)
+      .selectAll('circle')
+      .data(nodes)
+      .join('circle')
+      .attr('r', 5)
+      .attr('fill', d => color(d.group))
+      .attr('data-id', d => d.id)
+      .call(d3.drag()
+      .on('start', dragstarted)
+      .on('drag', dragged)
+      .on('end', dragended));
+      
+      node.append('title').text(d => d.id);
+      
+      const simulation = simulationRef.current;
+      
+      simulation
+      .nodes(nodes)
+      .force('link').links(links);
+      
+      simulation.alpha(1).restart();
+      
+      simulation.on('tick', () => {
+      link
+        .attr('x1', d => d.source.x)
+        .attr('y1', d => d.source.y)
+        .attr('x2', d => d.target.x)
+        .attr('y2', d => d.target.y);
+
+      node
+        .attr('cx', d => d.x)
+        .attr('cy', d => d.y);
+    });
+
+    function dragstarted(event) {
+      if (!event.active) simulation.alphaTarget(0.3).restart();
+      event.subject.fx = event.subject.x;
+      event.subject.fy = event.subject.y;
+    }
+
+    function dragged(event) {
+      event.subject.fx = event.x;
+      event.subject.fy = event.y;
+    }
+    
+    function dragended(event) {
+      if (!event.active) simulation.alphaTarget(0);
+      event.subject.fx = null;
+      event.subject.fy = null;
+    }
+  }, [nodes, links]);
+
+  const handlePruneClick = useCallback((e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    console.log("Button clicked - step:", currentPruneStep);
+    pruneNextEdge();
+  }, [pruneNextEdge]); // Only depends on pruneNextEdge
+  
   //Placeholder functions
   // Placeholder function for adding an edge
   const addEdge = async (source, target) => {
@@ -245,255 +668,6 @@ export default function SampleGraph() {
   };
   //End of Placeholder functions
 
-  useEffect(() => {
-    const loadData = async () => {
-      const response = await fetch('./dataset.json');
-      const data = await response.json();
-      setDatasets(data);
-      console.log("Datasets loaded:", data);
-    };
-
-    loadData();
-  }, []);
-
-  useEffect(() => {
-    console.log("Datasets loaded:", datasets);
-    if (datasets.length > 0) {
-      const { nodes: newNodes, links: newLinks } = datasets[currentDatasetIndex];
-      setNodes(newNodes);
-      setLinks(newLinks);
-    }
-  }, [datasets]);
-
-  const updateGraph = (index) => {
-    if (datasets.length === 0 || !datasets[index]) {
-      console.error("No dataset available at index:", index);
-      return;
-    }
-
-    console.log("Updating graph with dataset index:", index);
-    const { nodes: newNodes, links: newLinks } = datasets[index];
-    console.log("New nodes:", newNodes);
-    console.log("New links:", newLinks);
-
-    // Create maps for quick lookup
-    const currentNodesMap = new Map(nodes.map(node => [node.id, node]));
-    const newNodesMap = new Map(newNodes.map(node => [node.id, node]));
-
-    const currentLinksMap = new Map(links.map(link => [`${link.source.id}-${link.target.id}`, link]));
-    const newLinksMap = new Map(newLinks.map(link => [`${link.source}-${link.target}`, link]));
-
-    // Determine nodes to add and remove
-    const nodesToAdd = [];
-    const nodesToRemove = [];
-
-    // Check for nodes to add
-    for (const newNode of newNodes) {
-      if (!currentNodesMap.has(newNode.id)) {
-        nodesToAdd.push(newNode);
-      }
-    }
-
-    // Check for nodes to remove
-    for (const currentNode of nodes) {
-      if (!newNodesMap.has(currentNode.id)) {
-        nodesToRemove.push(currentNode);
-      }
-    }
-
-    // Determine links to add and remove
-    const linksToAdd = [];
-    const linksToRemove = [];
-
-    // Check for links to add
-    for (const newLink of newLinks) {
-      const linkKey = `${newLink.source}-${newLink.target}`;
-      if (!currentLinksMap.has(linkKey)) {
-        // Ensure source and target are node objects, not just IDs
-        const sourceNode = newNodes.find(node => node.id === newLink.source);
-        const targetNode = newNodes.find(node => node.id === newLink.target);
-        if (sourceNode && targetNode) {
-          linksToAdd.push({ source: sourceNode, target: targetNode });
-        }
-      }
-    }
-
-    // Check for links to remove
-    for (const currentLink of links) {
-      const linkKey = `${currentLink.source.id}-${currentLink.target.id}`;
-      if (!newLinksMap.has(linkKey)) {
-        linksToRemove.push(currentLink);
-      }
-    }
-
-    // Function to update nodes and links one at a time
-    const updateGraphElements = () => {
-      if (nodesToAdd.length > 0) {
-        // Add one node at a time
-        const nodeToAdd = nodesToAdd.shift();
-        setNodes(prevNodes => [...prevNodes, nodeToAdd]);
-        setTimeout(updateGraphElements, 500); // Delay between adding nodes (500ms)
-      } else if (nodesToRemove.length > 0) {
-        // Remove one node at a time
-        const nodeToRemove = nodesToRemove.shift();
-        setNodes(prevNodes => prevNodes.filter(node => node.id !== nodeToRemove.id));
-
-        // Remove any links connected to the removed node
-        setLinks(prevLinks => prevLinks.filter(link => 
-          link.source.id !== nodeToRemove.id && link.target.id !== nodeToRemove.id
-        ));
-
-        setTimeout(updateGraphElements, 500); // Delay between removing nodes (500ms)
-      } else if (linksToAdd.length > 0) {
-        // Add one link at a time
-        const linkToAdd = linksToAdd.shift();
-        setLinks(prevLinks => [...prevLinks, linkToAdd]);
-        setTimeout(updateGraphElements, 500); // Delay between adding links (500ms)
-      } else if (linksToRemove.length > 0) {
-        // Remove one link at a time
-        const linkToRemove = linksToRemove.shift();
-        setLinks(prevLinks => prevLinks.filter(link => 
-          link.source.id !== linkToRemove.source.id || link.target.id !== linkToRemove.target.id
-        ));
-        setTimeout(updateGraphElements, 500); // Delay between removing links (500ms)
-      }
-    };
-
-    // Start the update process
-    updateGraphElements();
-  };
-
-  // Effect to handle auto-updating the graph
-  useEffect(() => {
-    if (isAutoUpdating) {
-      console.log("Auto-update started"); // Log when auto-update starts
-      // Start auto-update
-      intervalRef.current = setInterval(() => {
-        setCurrentDatasetIndex(prevIndex => {
-          const nextIndex = (prevIndex + 1) % datasets.length;
-          updateGraph(nextIndex);
-          return nextIndex;
-        });
-      }, 5000); // Update every 5 seconds
-    } else {
-      console.log("Auto-update stopped"); // Log when auto-update stops
-      // Stop auto-update
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-        intervalRef.current = null;
-      }
-    }
-
-    // Cleanup interval on unmount
-    return () => {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-      }
-    };
-  }, [isAutoUpdating, datasets]);
-
-  // Effect to render the graph when Nodes or Links change
-  useEffect(() => {
-    if (datasets.length === 0) return; // Ensure datasets are loaded
-
-    const   width = window.innerWidth;
-    const height = window.innerHeight;
-
-    const color = d3.scaleOrdinal(d3.schemeCategory10);
-
-    if (!simulationRef.current) {
-      simulationRef.current = d3.forceSimulation()
-        .force('link', d3.forceLink().id(d => d.id).strength(0.5))
-        .force('charge', d3.forceManyBody().strength(-100))
-        .force('center', d3.forceCenter(width / 2, height / 2));
-    }
-
-    const svg = d3.select(svgRef.current)
-      .attr('width', width)
-      .attr('height', height)
-      .attr('viewBox', [0, 0, width, height])
-      .attr('style', 'max-width: auto; height: auto;')
-      .attr('class', 'responsive-svg');
-
-    svg.selectAll('*').remove();
-
-    const zoomableGroup = svg.append('g');
-
-    const zoom = d3.zoom()
-      .scaleExtent([0.1, 10])
-      .on('zoom', (event) => {
-        zoomableGroup.attr('transform', event.transform);
-      });
-
-    svg.call(zoom);
-
-    const link = zoomableGroup.append('g')
-    .attr('stroke', '#999')
-    .attr('stroke-opacity', 0.6)
-    .selectAll('line')
-    .data(links, d => `${d.source}-${d.target}`)
-    .join('line')
-    .attr('stroke-width', 2)
-    .attr('data-id', d =>`${d.source}-${d.target}`)
-    .attr('x1', d => d.source.x)
-    .attr('y1', d => d.source.y)
-    .attr('x2', d => d.target.x)
-    .attr('y2', d => d.target.y);
-
-    const node = zoomableGroup.append('g')
-      .attr('stroke', '#fff')
-      .attr('stroke-width', 1.5)
-      .selectAll('circle')
-      .data(nodes)
-      .join('circle')
-      .attr('r', 5)
-      .attr('fill', d => color(d.group))
-      .attr('data-id', d => d.id)
-      .call(d3.drag()
-        .on('start', dragstarted)
-        .on('drag', dragged)
-        .on('end', dragended));
-
-    node.append('title').text(d => d.id);
-
-    const simulation = simulationRef.current;
-
-    simulation
-      .nodes(nodes)
-      .force('link').links(links);
-
-    simulation.alpha(1).restart();
-
-    simulation.on('tick', () => {
-      link
-        .attr('x1', d => d.source.x)
-        .attr('y1', d => d.source.y)
-        .attr('x2', d => d.target.x)
-        .attr('y2', d => d.target.y);
-
-      node
-        .attr('cx', d => d.x)
-        .attr('cy', d => d.y);
-    });
-
-    function dragstarted(event) {
-      if (!event.active) simulation.alphaTarget(0.3).restart();
-      event.subject.fx = event.subject.x;
-      event.subject.fy = event.subject.y;
-    }
-
-    function dragged(event) {
-      event.subject.fx = event.x;
-      event.subject.fy = event.y;
-    }
-
-    function dragended(event) {
-      if (!event.active) simulation.alphaTarget(0);
-      event.subject.fx = null;
-      event.subject.fy = null;
-    }
-  }, [nodes, links, datasets]);
-
   const handleSliderChange = (event) => {
     const index = parseInt(event.target.value, 10);
     setCurrentDatasetIndex(index);
@@ -511,11 +685,17 @@ export default function SampleGraph() {
     <div>
       <div className="flex flex-row mb-4 justify-center">
         <Button
-          onClick={() => setIsAutoUpdating(prev => !prev)} // Toggle auto-update
+          onClick={() => setIsAutoPruning(prev => !prev)} // Toggle auto-update
           className="mr-2 mb-2 text-md"
         >
-          {isAutoUpdating ? 'Stop Auto-Update' : 'Start Auto-Update'}
+          {isAutoPruning ? 'Stop Auto-Update' : 'Start Auto-Update'}
         </Button>
+        <Button onClick={handlePruneClick} disabled={isAutoPruning}>
+        Prune Next Edge
+        </Button>
+        <div>
+        Progress: {currentPruneStep} / {pruneQueue.length} edges pruned
+      </div>
       </div>
       <div className="flex flex-row mb-4 justify-center">
         <input
