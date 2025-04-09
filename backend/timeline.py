@@ -98,3 +98,46 @@ def find_node_by_id(root: TimeLineNode, node_id: int) -> Optional[TimeLineNode]:
             return result
     
     return None  # Node not found
+
+def get_navigation_path(self, target_node: TimeLineNode) -> List[List[int]]:
+    """
+    Returns the sequence of actions needed to navigate to target_node
+    Format: [[action, source, target], ...]
+    Does NOT modify any state - purely read-only
+    """
+    if target_node == self.current_node:
+        return []
+
+    action_sequence = []
+    current = self.current_node
+    
+    # Phase 1: Walk up to common ancestor (exactly matching navigate()'s logic)
+    up_path = []
+    while current != target_node and current.parent is not None:
+        up_path.append(current)
+        current = current.parent
+    
+    # Phase 2: Walk down to target (matching navigate()'s logic)
+    down_path = []
+    temp = target_node
+    while temp != current and temp.parent is not None:
+        down_path.append(temp)
+        temp = temp.parent
+    down_path.reverse()  # Because we built it from target up
+
+    # Generate actions without executing anything
+    for node in reversed(up_path):  # Same order as navigate()'s reversal
+        action_sequence.append([
+            1 if node.action == 0 else 0,  # Inverse action
+            node.source_node,
+            node.target_node
+        ])
+    
+    for node in down_path:  # Same order as navigate()'s application
+        action_sequence.append([
+            node.action,
+            node.source_node,
+            node.target_node
+        ])
+    
+    return action_sequence

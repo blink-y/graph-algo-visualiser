@@ -44,6 +44,14 @@ class CoreStructure(BaseModel):
 class AlgorithmsResponse(BaseModel):
     core_data: Dict[int, CoreStructure]
     timeline: Optional[Dict] = None  # This should be a plain dictionary
+    
+class NavigationStep(BaseModel):
+    action: int  # 1=add, 0=remove
+    source: int
+    target: int
+
+class NavigationResponse(AlgorithmsResponse):
+    action_sequence: List[NavigationStep]
 
 @app.post("/initialize_graph", response_model=AlgorithmsResponse)
 async def initialize_graph(value: Value):
@@ -163,18 +171,23 @@ async def get_current_graph():
     global_core_data = graph_utils.run_all_kcores(list(TIMELINE.graph.edges()))
     return AlgorithmsResponse(core_data=global_core_data, timeline=TIMELINE.root.to_dict())
 
-@app.post("/navigate_to_node", response_model=AlgorithmsResponse)
+@app.post("/navigate_to_node", response_model=NavigationResponse)
 async def navigate_to_node(node_id: int):
     global TIMELINE, global_core_data
 
-    # Find the target node in the timeline (this is a placeholder; you'll need to implement node lookup)
     target_node = find_node_by_id(TIMELINE.root, node_id)
     if not target_node:
         raise HTTPException(status_code=404, detail="Node not found")
+
+    # Get the planned path (read-only)
+    action_sequence = TIMELINE.get_navigation_path(target_node)
     
-    # Navigate to the target node
+    # Execute the navigation (modifies state)
     TIMELINE.navigate(target_node)
     
-    # Compute core data for the graph at the target node
-    global_core_data = graph_utils.run_all_kcores(list(TIMELINE.graph.edges()))
-    return AlgorithmsResponse(core_data=global_core_data, timeline=TIMELINE.root.to_dict())
+    # Return both results
+    return NavigationResponse(
+        core_data=graph_utils.run_all_kcores(list(TIMELINE.graph.edges())),
+        timeline=TIMELINE.root.to_dict(),
+        action_sequence=action_sequence
+    )
