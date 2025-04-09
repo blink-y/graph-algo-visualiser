@@ -25,6 +25,7 @@ export default function SampleGraph() {
   const [isAutoPruning, setIsAutoPruning] = useState(false);
   const [currentPruneStep, setCurrentPruneStep] = useState(0);
   const [pruneQueue, setPruneQueue] = useState([]);
+  const [isPruning, setIsPruning] = useState(false);
 
   // Graph Manipulation States
   const [selectedValue, setSelectedValue] = useState('1');
@@ -42,7 +43,6 @@ export default function SampleGraph() {
     setTreeData(data);
   };
 
-  // Effect to handle auto-updating the graph
   // Initialize graph and prune queue
   useEffect(() => {
     const loadData = async () => {
@@ -53,7 +53,7 @@ export default function SampleGraph() {
           headers: {
             'Content-Type': 'application/json'
           },
-          body: JSON.stringify({ value: "1" }) // Send '1', '2', or '3'
+          body: JSON.stringify({ value: "1" })
         });
   
         if (!response.ok) {
@@ -127,10 +127,15 @@ export default function SampleGraph() {
 
   const pruneNextEdge = useCallback(() => {
     console.log('--- Prune Start ---');
+    if(isPruning) {
+      console.log('Already pruning, skipping this step');
+      return;
+    };
+    // setIsPruning(true);
 
     // Use functional update to get the most current state
     setCurrentPruneStep((currentStep) => {
-      console.log('Current step:', currentStep, 'Queue:', pruneQueue);
+      console.log('Current step:', currentStep);
 
       if (currentStep >= pruneQueue.length) {
         console.log('All edges pruned');
@@ -157,10 +162,11 @@ export default function SampleGraph() {
       }
 
       const { source, target } = edgeToRemove;
+      
       // Api Call for Tree
-      deleteEdge(source,  target)
-      const newLinks = links.filter((link) => link.id !== edgeId);
+      deleteEdge(source, target)
 
+      const newLinks = links.filter((link) => link.id !== edgeId);
       console.log('Pruning edge:', source.id, target.id, edgeId);
 
       // Check if nodes become orphans
@@ -254,12 +260,13 @@ export default function SampleGraph() {
         if (simulationRef.current) {
           simulationRef.current.nodes(newNodes).force('link').links(newLinks);
           simulationRef.current.alpha(0.5).restart();
+          // setIsPruning[false];
         }
       }, 1500);
 
       return currentStep + 1;
     });
-  }, [pruneQueue, links, nodes]); // Dependencies
+  }, [pruneQueue, links, nodes]);
 
   // Auto-prune effect
   useEffect(() => {
@@ -427,12 +434,11 @@ export default function SampleGraph() {
   // Placeholder function for deleting an edge
   const deleteEdge = async (source, target) => {
     console.log(`Deleting edge from ${source.id} to ${target.id}`);
-    const sourceId = source.id
-    const targetId = target.id
-    const deleteEdgeData = { sourceId, targetId };
+    const deleteEdgeData = { source: source.id, target: target.id };
     try {
       const response = await fetch('http://localhost:8000/remove_edge', {
-        method: 'DELETE',
+        method: 'POST',
+        credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
         },
