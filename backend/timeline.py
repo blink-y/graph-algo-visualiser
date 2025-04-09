@@ -2,13 +2,16 @@ import networkx as nx
 from typing import Optional
 
 class TimeLineNode:
+    _next_id = 1  # Class variable to track IDs
+    
     def __init__(self, action, source_node, target_node, parent=None):
         self.action = action  # 1 for add_edge, 0 for remove_edge
         self.source_node = source_node
         self.target_node = target_node
         self.parent = parent
         self.children = []
-        self.id = id(self)  # Assign a unique ID to each node (using Python's built-in id function)
+        self.id = TimeLineNode._next_id
+        TimeLineNode._next_id += 1
     
     def __repr__(self):
         action_str = "Add" if self.action == 1 else "Remove"
@@ -23,8 +26,13 @@ class TimeLineNode:
             "action": self.action,
             "source_node": self.source_node,
             "target_node": self.target_node,
-            "children": [child.to_dict() for child in self.children]  # Only include children
+            "children": [child.to_dict() for child in self.children]
         }
+
+    @classmethod
+    def reset_ids(cls):
+        """Reset ID counter (useful for testing)"""
+        cls._next_id = 1
 
 class TimeLine:
     def __init__(self):
