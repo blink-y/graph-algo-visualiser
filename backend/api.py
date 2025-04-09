@@ -97,20 +97,17 @@ async def initialize_graph(value: Value):
     else:
         raise HTTPException(status_code=400, detail="Invalid value. Please use 1, 2, or 3.")
     
-    # Initialize fresh timeline with empty root
+    # Reset the timeline and initialize the graph
     TIMELINE = TimeLine()
-    
-    # Add all edges directly to graph (no timeline recording)
-    for u, v in edges:
-        TIMELINE.graph.add_edge(u, v)
+    for edge in edges:
+        TIMELINE.graph.add_edge(edge[0], edge[1])  # Add all edges to the graph
+        TIMELINE.add_change(1, edge[0], edge[1])  # Add all edges to the timeline
     
     # Compute core data
-    global_core_data = graph_utils.run_all_kcores(edges)
-    
-    # Return response with empty timeline (root has no children)
+    core_data = graph_utils.run_all_kcores(edges)
     return AlgorithmsResponse(
-        core_data=global_core_data,
-        timeline=TIMELINE.root.to_dict()  # Will show empty root node
+        core_data=core_data,
+        timeline=TIMELINE.root.to_dict() if TIMELINE.root else None
     )
 
 @app.post("/execute_algorithms", response_model=AlgorithmsResponse)
