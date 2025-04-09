@@ -48,8 +48,12 @@ def get_kcore(G, k=None, core_number=None):
 def run_all_kcores(edges):
     # Step 1: Initialize
     G = generate_graph(edges)
-    all_cores = {}  # Stores raw k-core data
+    all_cores = {}  
     k = 1
+    
+    # Helper function to preserve edge order
+    def ordered_edge(u, v):
+        return (u, v) if (u, v) in G.edges() else (v, u)
     
     # Step 2-12: Compute all k-cores
     while True:
@@ -61,54 +65,48 @@ def run_all_kcores(edges):
             
         all_cores[k] = {
             'nodes': set(k_core.nodes()),
-            'edges': {frozenset(edge) for edge in edges_in_core}
+            'edges': {ordered_edge(u, v) for u, v in edges_in_core}  # Preserve order
         }
         k += 1
     
     if not all_cores:
         return {}
     
-    # Step 13-21: Process cores from highest to lowest
+    # Step 13-21: Process cores
     final_cores = {}
     max_k = max(all_cores.keys())
-    
-    # For tracking what gets pruned at each level
     pruning_data = {k: {'nodes': set(), 'edges': set()} for k in all_cores}
     
-    # Highest core keeps all its elements
+    # Highest core
     final_cores[max_k] = {
         'nodes': list(all_cores[max_k]['nodes']),
         'edges': [tuple(edge) for edge in all_cores[max_k]['edges']],
-        'pruned_edges': []  # Nothing pruned from highest core
+        'pruned_edges': []
     }
     
-    # Lower cores only keep unique elements
+    # Lower cores
     for k in range(max_k-1, 0, -1):
         current_nodes = all_cores[k]['nodes']
         current_edges = all_cores[k]['edges']
         higher_nodes = all_cores[k+1]['nodes']
         higher_edges = all_cores[k+1]['edges']
         
-        # Unique elements not in higher cores
         unique_nodes = current_nodes - higher_nodes
         unique_edges = current_edges - higher_edges
         
-        # Find what gets pruned when moving from k to k+1
         pruned_nodes = current_nodes - higher_nodes
         pruned_edges = set()
         
-        # Edges between pruned nodes and remaining nodes
         for node in pruned_nodes:
             for neighbor in G.neighbors(node):
                 if neighbor in current_nodes:
-                    edge = frozenset({node, neighbor})
+                    # Use ordered_edge helper here too
+                    edge = ordered_edge(node, neighbor)
                     pruned_edges.add(edge)
         
-        # Also include edges between pruned nodes
-        for edge in current_edges:
-            u, v = edge
+        for u, v in current_edges:  # Now using tuple unpacking
             if u in pruned_nodes and v in pruned_nodes:
-                pruned_edges.add(edge)
+                pruned_edges.add(ordered_edge(u, v))
         
         pruning_data[k]['nodes'] = pruned_nodes
         pruning_data[k]['edges'] = pruned_edges

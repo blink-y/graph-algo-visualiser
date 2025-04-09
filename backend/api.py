@@ -118,30 +118,30 @@ async def add_edge(edge_op: EdgeOperation):
     
     return AlgorithmsResponse(core_data=global_core_data, timeline=TIMELINE.root.to_dict())
 
-# @app.post("/remove_node", response_model=AlgorithmsResponse)
-# async def remove_node(node_op: NodeOperation):
-#     global TIMELINE
+# # @app.post("/remove_node", response_model=AlgorithmsResponse)
+# # async def remove_node(node_op: NodeOperation):
+# #     global TIMELINE
 
-#     # Remove all edges connected to the node
-#     edges_to_remove = [edge for edge in TIMELINE.graph.edges() if node_op.node in edge]
+# #     # Remove all edges connected to the node
+# #     edges_to_remove = [edge for edge in TIMELINE.graph.edges() if node_op.node in edge]
+# #     for edge in edges_to_remove:
+# #         TIMELINE.add_change(0, edge[0], edge[1])  # Remove each edge
+    
+#     # Get the affected region (neighboring nodes)
+#     G = graph_utils.generate_graph(list(TIMELINE.graph.edges()))
+#     affected_nodes = set()
 #     for edge in edges_to_remove:
-#         TIMELINE.add_change(0, edge[0], edge[1])  # Remove each edge
+#         affected_subgraph = graph_utils.get_affected_region(G, edge=edge)
+#         affected_nodes.update(set(affected_subgraph.nodes()))
     
-    # Get the affected region (neighboring nodes)
-    G = graph_utils.generate_graph(list(TIMELINE.graph.edges()))
-    affected_nodes = set()
-    for edge in edges_to_remove:
-        affected_subgraph = graph_utils.get_affected_region(G, edge=edge)
-        affected_nodes.update(set(affected_subgraph.nodes()))
+#     # Recalculate k-core for the affected region
+#     local_edges = list(G.subgraph(affected_nodes).edges())
+#     local_core_data = graph_utils.run_all_kcores(local_edges)
     
-    # Recalculate k-core for the affected region
-    local_edges = list(G.subgraph(affected_nodes).edges())
-    local_core_data = graph_utils.run_all_kcores(local_edges)
+#     # Compute the global core data
+#     global_core_data = graph_utils.run_all_kcores(list(TIMELINE.graph.edges()))
     
-    # Compute the global core data
-    global_core_data = graph_utils.run_all_kcores(list(TIMELINE.graph.edges()))
-    
-    return AlgorithmsResponse(core_data=global_core_data, timeline=TIMELINE.root.to_dict())
+#     return AlgorithmsResponse(core_data=global_core_data, timeline=TIMELINE.root.to_dict())
 
 @app.post("/remove_edge", response_model=AlgorithmsResponse)
 async def remove_edge(edge_op: EdgeOperation):
