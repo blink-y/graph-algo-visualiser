@@ -159,14 +159,14 @@ async def remove_edge(edge_op: EdgeOperation):
     # Remove the edge from the timeline
     TIMELINE.add_change(0, edge_op.source, edge_op.target)
     
-    # Get the affected region (neighboring nodes)
-    G = graph_utils.generate_graph(list(TIMELINE.graph.edges()))
-    affected_subgraph = graph_utils.get_affected_region(G, edge=(edge_op.source, edge_op.target))
-    affected_nodes = set(affected_subgraph.nodes())
+    # # Get the affected region (neighboring nodes)
+    # G = graph_utils.generate_graph(list(TIMELINE.graph.edges()))
+    # affected_subgraph = graph_utils.get_affected_region(G, edge=(edge_op.source, edge_op.target))
+    # affected_nodes = set(affected_subgraph.nodes())
     
-    # Recalculate k-core for the affected region
-    local_edges = list(affected_subgraph.edges())
-    local_core_data = graph_utils.run_all_kcores(local_edges)
+    # # Recalculate k-core for the affected region
+    # local_edges = list(affected_subgraph.edges())
+    # local_core_data = graph_utils.run_all_kcores(local_edges)
     
     # Compute the global core data
     global_core_data = graph_utils.run_all_kcores(list(TIMELINE.graph.edges()))
