@@ -112,9 +112,9 @@ async def initialize_graph(value: Value):
         TIMELINE.add_change(1, edge[0], edge[1])  # Add all edges to the timeline
     
     # Compute core data
-    core_data = graph_utils.run_all_kcores(edges)
+    global_core_data = graph_utils.run_all_kcores(edges)
     return AlgorithmsResponse(
-        core_data=core_data,
+        core_data=global_core_data,
         timeline=TIMELINE.root.to_dict() if TIMELINE.root else None
     )
 
