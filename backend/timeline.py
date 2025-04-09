@@ -107,7 +107,7 @@ def find_node_by_id(root: TimeLineNode, node_id: int) -> Optional[TimeLineNode]:
     
     return None  # Node not found
 
-def get_navigation_path(self, target_node: TimeLineNode) -> List[List[int]]:
+def get_navigation_path(self, target_node: TimeLineNode):
     """
     Returns the sequence of actions needed to navigate to target_node
     Format: [[action, source, target], ...]
