@@ -19,11 +19,11 @@ class TimeLineNode:
         Converts the node and its children into a dictionary format.
         """
         return {
-            "id": self.id,  # Include the node ID in the dictionary
+            "id": self.id,
             "action": self.action,
             "source_node": self.source_node,
             "target_node": self.target_node,
-            "children": [child.to_dict() for child in self.children]  # Recursively convert children
+            "children": [child.to_dict() for child in self.children]  # Only include children
         }
 
 class TimeLine:

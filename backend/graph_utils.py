@@ -46,81 +46,81 @@ def get_kcore(G, k=None, core_number=None):
     return get_core_subgraph(G, k_filter, k, core_number)
 
 def run_all_kcores(edges):
+    # Step 1: Initialize
     G = generate_graph(edges)
-    core_data = {}
-    pruning_data = {}  # To store nodes and edges pruned at each k
+    all_cores = {}  # Stores raw k-core data
     k = 1
-
-    # Collect all k-cores
+    
+    # Step 2-12: Compute all k-cores
     while True:
         k_core = get_kcore(G, k)
-        k_core_edges = k_core.edges()
-
-        if not k_core_edges:  # If there are no edges, break the loop
+        edges_in_core = list(k_core.edges())
+        
+        if not edges_in_core:
             break
-
-        # Get the nodes in the current k-core
-        nodes_in_k_core = set(k_core.nodes())
-
-        # If k > 1, calculate the nodes and edges pruned from the previous k-core
-        if k > 1:
-            nodes_in_previous_core = core_data[k - 1]['nodes']
-            pruned_nodes = nodes_in_previous_core - nodes_in_k_core
-            pruned_edges = []
-
-            # Find edges that were removed during pruning
-            for node in pruned_nodes:
-                pruned_edges.extend([(node, neighbor) for neighbor in G.neighbors(node) if neighbor in nodes_in_previous_core])
-
-            pruning_data[k - 1] = {
-                'nodes': list(pruned_nodes),
-                'edges': list(set(pruned_edges))  # Remove duplicate edges
-            }
-
-        # Store the current k-core data
-        core_data[k] = {
-            'nodes': nodes_in_k_core,
-            'edges': set(frozenset((u, v)) for u, v in k_core_edges),
-            'pruned_edges': pruning_data.get(k - 1, {'nodes': [], 'edges': []})  # Add pruned edges
+            
+        all_cores[k] = {
+            'nodes': set(k_core.nodes()),
+            'edges': {frozenset(edge) for edge in edges_in_core}
         }
         k += 1
-
-    # Handle pruning for the last k-core (no higher core to compare with)
-    pruning_data[k - 1] = {'nodes': [], 'edges': []}  # No pruning for the highest k-core
-
-    # Finalize core data
-    final_core_data = {}
-    highest_core = k - 1
-
-    for current_k in range(highest_core, 0, -1):
-        if current_k == highest_core:
-            # For highest core, include all its nodes and edges
-            final_core_data[current_k] = {
-                'nodes': list(core_data[current_k]['nodes']),
-                'edges': list(tuple(e) for e in core_data[current_k]['edges']),
-                'pruned_edges': []  # No pruned edges for the highest core
+    
+    if not all_cores:
+        return {}
+    
+    # Step 13-21: Process cores from highest to lowest
+    final_cores = {}
+    max_k = max(all_cores.keys())
+    
+    # For tracking what gets pruned at each level
+    pruning_data = {k: {'nodes': set(), 'edges': set()} for k in all_cores}
+    
+    # Highest core keeps all its elements
+    final_cores[max_k] = {
+        'nodes': list(all_cores[max_k]['nodes']),
+        'edges': [tuple(edge) for edge in all_cores[max_k]['edges']],
+        'pruned_edges': []  # Nothing pruned from highest core
+    }
+    
+    # Lower cores only keep unique elements
+    for k in range(max_k-1, 0, -1):
+        current_nodes = all_cores[k]['nodes']
+        current_edges = all_cores[k]['edges']
+        higher_nodes = all_cores[k+1]['nodes']
+        higher_edges = all_cores[k+1]['edges']
+        
+        # Unique elements not in higher cores
+        unique_nodes = current_nodes - higher_nodes
+        unique_edges = current_edges - higher_edges
+        
+        # Find what gets pruned when moving from k to k+1
+        pruned_nodes = current_nodes - higher_nodes
+        pruned_edges = set()
+        
+        # Edges between pruned nodes and remaining nodes
+        for node in pruned_nodes:
+            for neighbor in G.neighbors(node):
+                if neighbor in current_nodes:
+                    edge = frozenset({node, neighbor})
+                    pruned_edges.add(edge)
+        
+        # Also include edges between pruned nodes
+        for edge in current_edges:
+            u, v = edge
+            if u in pruned_nodes and v in pruned_nodes:
+                pruned_edges.add(edge)
+        
+        pruning_data[k]['nodes'] = pruned_nodes
+        pruning_data[k]['edges'] = pruned_edges
+        
+        if unique_nodes:
+            final_cores[k] = {
+                'nodes': list(unique_nodes),
+                'edges': [tuple(edge) for edge in unique_edges],
+                'pruned_edges': [tuple(e) for e in pruning_data[k]['edges']]
             }
-        else:
-            # For other cores, only include nodes and edges unique to this core
-            nodes_in_current = core_data[current_k]['nodes']
-            nodes_in_higher = core_data[current_k + 1]['nodes']
-            edges_in_current = core_data[current_k]['edges']
-            edges_in_higher = core_data[current_k + 1]['edges']
-
-            unique_nodes = nodes_in_current - nodes_in_higher
-            unique_edges = edges_in_current - edges_in_higher
-
-            if len(unique_nodes) == 0:
-                pass
-            else:
-                final_core_data[current_k] = {
-                    'nodes': list(unique_nodes),
-                    'edges': list(tuple(e) for e in unique_edges),
-                    'pruned_edges': pruning_data[current_k]['edges']  # Add pruned edges
-                }
-
-    # Return the final core data
-    return final_core_data
+    
+    return final_cores
 
 def get_affected_region(G, node=None, edge=None, radius=2):
     affected_nodes = set()
