@@ -46,16 +46,14 @@ def get_kcore(G, k=None, core_number=None):
     return get_core_subgraph(G, k_filter, k, core_number)
 
 def run_all_kcores(edges):
-    # Step 1: Initialize
+    # Step 1: Initialize with original edge directions
     G = generate_graph(edges)
-    all_cores = {}  
+    original_edges = set((u, v) for u, v in edges)  # Store original directions
+    
+    all_cores = {}
     k = 1
     
-    # Helper function to preserve edge order
-    def ordered_edge(u, v):
-        return (u, v) if (u, v) in G.edges() else (v, u)
-    
-    # Step 2-12: Compute all k-cores
+    # Step 2-12: Compute all k-cores while preserving edge directions
     while True:
         k_core = get_kcore(G, k)
         edges_in_core = list(k_core.edges())
@@ -63,16 +61,24 @@ def run_all_kcores(edges):
         if not edges_in_core:
             break
             
+        # Preserve original edge directions
+        directed_edges = set()
+        for u, v in edges_in_core:
+            if (u, v) in original_edges:
+                directed_edges.add((u, v))
+            else:
+                directed_edges.add((v, u))
+        
         all_cores[k] = {
             'nodes': set(k_core.nodes()),
-            'edges': {ordered_edge(u, v) for u, v in edges_in_core}  # Preserve order
+            'edges': directed_edges  # Now using ordered tuples
         }
         k += 1
     
     if not all_cores:
         return {}
     
-    # Step 13-21: Process cores
+    # Step 13-21: Process cores with consistent edge directions
     final_cores = {}
     max_k = max(all_cores.keys())
     pruning_data = {k: {'nodes': set(), 'edges': set()} for k in all_cores}
@@ -80,7 +86,7 @@ def run_all_kcores(edges):
     # Highest core
     final_cores[max_k] = {
         'nodes': list(all_cores[max_k]['nodes']),
-        'edges': [tuple(edge) for edge in all_cores[max_k]['edges']],
+        'edges': list(all_cores[max_k]['edges']),  # Already ordered
         'pruned_edges': []
     }
     
@@ -100,13 +106,19 @@ def run_all_kcores(edges):
         for node in pruned_nodes:
             for neighbor in G.neighbors(node):
                 if neighbor in current_nodes:
-                    # Use ordered_edge helper here too
-                    edge = ordered_edge(node, neighbor)
-                    pruned_edges.add(edge)
+                    # Check original edge direction
+                    if (node, neighbor) in original_edges:
+                        pruned_edges.add((node, neighbor))
+                    elif (neighbor, node) in original_edges:
+                        pruned_edges.add((neighbor, node))
         
-        for u, v in current_edges:  # Now using tuple unpacking
+        for u, v in current_edges:
             if u in pruned_nodes and v in pruned_nodes:
-                pruned_edges.add(ordered_edge(u, v))
+                # Maintain original direction
+                if (u, v) in original_edges:
+                    pruned_edges.add((u, v))
+                else:
+                    pruned_edges.add((v, u))
         
         pruning_data[k]['nodes'] = pruned_nodes
         pruning_data[k]['edges'] = pruned_edges
@@ -114,8 +126,8 @@ def run_all_kcores(edges):
         if unique_nodes:
             final_cores[k] = {
                 'nodes': list(unique_nodes),
-                'edges': [tuple(edge) for edge in unique_edges],
-                'pruned_edges': [tuple(e) for e in pruning_data[k]['edges']]
+                'edges': list(unique_edges),
+                'pruned_edges': list(pruned_edges)
             }
     
     return final_cores
