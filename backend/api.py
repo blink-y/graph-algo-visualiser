@@ -105,6 +105,8 @@ async def initialize_graph(value: Value):
     else:
         raise HTTPException(status_code=400, detail="Invalid value. Please use 1, 2, or 3.")
     
+    TIMELINE = TimeLine()
+    
     # Add all edges directly to graph (no timeline recording)
     for u, v in edges:
         TIMELINE.graph.add_edge(u, v)
