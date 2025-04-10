@@ -174,10 +174,10 @@ async def get_current_graph():
     return AlgorithmsResponse(core_data=global_core_data, timeline=TIMELINE.root.to_dict())
 
 @app.post("/navigate_to_node", response_model=NavigationResponse)
-async def navigate_to_node(node_id: int):
+async def navigate_to_node(node_id: str):
     global TIMELINE, global_core_data
 
-    target_node = find_node_by_id(TIMELINE.root, node_id)
+    target_node = find_node_by_id(TIMELINE.root, int(node_id))
     if not target_node:
         raise HTTPException(status_code=404, detail="Node not found")
 
