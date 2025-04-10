@@ -101,3 +101,12 @@ body {
   opacity: 1;
   transform: translateY(0);
 }
+
+.legend {
+  pointer-events: none; /* Prevent interaction with legend */
+}
+
+.legend-item rect {
+  stroke: #fff;
+  stroke-width: 1px;
+}

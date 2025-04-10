@@ -8,25 +8,21 @@ import Menu from "./header";
 import Tree from "./K-Core/SampleTree.jsx";
 
 export default function Page() {
-  const containerRef = useRef(null); // Ref to track the parent container
-  const [containerWidth, setContainerWidth] = useState(0); // State to store the width
+  const containerRef = useRef(null); 
+  const [containerWidth, setContainerWidth] = useState(0);
 
-  // Effect to measure the width of the parent container
   useEffect(() => {
     const updateWidth = () => {
       if (containerRef.current) {
-        const width = containerRef.current.offsetWidth; // Get the width of the container
-        setContainerWidth(width); // Update the state with the new width
+        const width = containerRef.current.offsetWidth; 
+        setContainerWidth(width);
       }
     };
 
-    // Initial measurement
     updateWidth();
 
-    // Update width on window resize
     window.addEventListener("resize", updateWidth);
 
-    // Cleanup event listener on unmount
     return () => window.removeEventListener("resize", updateWidth);
   }, []);
 

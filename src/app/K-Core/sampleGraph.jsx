@@ -10,6 +10,7 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { useTreeStore } from './store';
 import { processGraphData } from './processGraphData';
 import { flashEdge, flashNode } from './animation';
+import { createLegend } from './graphLegend';
 
 export default function SampleGraph() {
 
@@ -55,7 +56,7 @@ export default function SampleGraph() {
           headers: {
             'Content-Type': 'application/json'
           },
-          body: JSON.stringify({ value: "1" })
+          body: JSON.stringify({ value: selectedValue })
         });
   
         if (!response.ok) {
@@ -81,7 +82,7 @@ export default function SampleGraph() {
     };
 
     loadData();
-  }, []);
+  }, [selectedValue]);
 
   // Add this early in your component
   // useEffect(() => {
@@ -103,6 +104,7 @@ export default function SampleGraph() {
     setCurrentPruneStep((currentStep) => {
       
       const currentPruneQueue = pruneQueue;
+      console.log('Current prune queue:', currentPruneQueue);
       console.log('Current step:', currentStep, 'Queue length:', currentPruneQueue.length);
 
       if (currentStep >= currentPruneQueue.length) {
@@ -123,61 +125,8 @@ export default function SampleGraph() {
       }    
       
       const { source, target } = edgeToRemove;
-
-      // Api Call for Tree
-      deleteEdge(source, target, '1');
-
-      const newLinks = links.filter((link) => link.id !== edgeId);
-      console.log('Pruning edge:', source.id, target.id, edgeId);
-
-      // Check if nodes become orphans
-      const isSourceOrphan = !newLinks.some(
-        (link) => link.source.id === source.id || link.target.id === source.id
-      );
-      const isTargetOrphan = !newLinks.some(
-        (link) => link.source.id === target.id || link.target.id === target.id
-      );
-
-      console.log('Orphan status:', { isSourceOrphan, isTargetOrphan });
-
-
-      // Create new nodes array
-      let newNodes = [...nodes];
-
-      if (isSourceOrphan) {
-        flashNode(source, 'red', 1000);
-        newNodes = newNodes.filter((node) => node.id !== source.id);
-      }
-
-      if (isTargetOrphan) {
-        flashNode(target, 'red', 1000);
-        newNodes = newNodes.filter((node) => node.id !== target.id);
-      }
-
-      // Edge removal animation
-      d3.select(`line[data-id="${edgeId}"]`)
-        .interrupt()
-        .transition()
-        .duration(500)
-        .style('stroke', 'red')
-        .style('stroke-width', '3px')
-        .transition()
-        .duration(300)
-        .style('stroke-opacity', 0)
-        .style('stroke-width', '0px')
-        .remove();
-
-      // Update state after animations complete
-      setTimeout(() => {
-        setLinks(newLinks);
-        setNodes(newNodes);
-        setIsPruning(false);
-
-        if (simulationRef.current) {
-          simulationRef.current.nodes(newNodes).force('link').links(newLinks);
-          simulationRef.current.alpha(0.5).restart();
-        }
-      }, 1500);
+      // Api Call 
+      deleteEdge(source.id, target.id, '1');
 
       return currentStep + 1;
     });
@@ -279,12 +228,12 @@ export default function SampleGraph() {
 
     node.append('title').text((d) => d.id);
 
+    // After creating your nodes/links
+    //createLegend(zoomableGroup, nodes, color);
+
     const simulation = simulationRef.current;
-
     simulation.nodes(nodes).force('link').links(links);
-
     simulation.alpha(1).restart();
-
     simulation.on('tick', () => {
       link
         .attr('x1', (d) => d.source.x)
@@ -362,10 +311,14 @@ export default function SampleGraph() {
   };
 
   // Placeholder function for deleting an edge
-  const deleteEdge = async (source, target, algo_running) => {
-    console.log(`Deleting edge from ${source.id} to ${target.id}`);
-    const deleteEdgeData = { source: source.id, target: target.id, algo_running: algo_running };
+  const deleteEdge = async (sourceId, targetId, algo_running) => {
+
+    const deleteEdgeData = { 
+      source: sourceId, 
+      target: targetId, 
+      algo_running: algo_running };
     console.log("Delete Edge Data: ", deleteEdgeData);
+
     try {
       const response = await fetch('http://localhost:8000/remove_edge', {
         method: 'POST',
@@ -377,9 +330,72 @@ export default function SampleGraph() {
       });
       const data = await response.json();
       console.log('Edge deleted successfully.', data);
-      console.log("Updating Tree State");
-      const treeData = data.timeline;
-      await handleModifyTree(treeData);
+
+      const processedData = processGraphData(data);
+      setPruneQueue(processedData.pruneSteps);
+      setDatasets(data);
+
+      if (algo_running === '0') {
+      setCurrentPruneStep(0);
+      setIsAutoPruning(false);
+      setIsPruning(false);
+      }
+
+      console.log("Updating Tree State", data.timeline);
+      await handleModifyTree(data.timeline);
+      
+      const edgeId = `${sourceId}-${targetId}`;
+      const newLinks = links.filter((link) => link.id !== edgeId);
+
+      const isSourceOrphan = !newLinks.some(
+        (link) => link.source.id === sourceId || link.target.id === sourceId
+      );
+      const isTargetOrphan = !newLinks.some(
+        (link) => link.source.id === targetId || link.target.id === targetId
+      );
+
+      let newNodes = [...nodes];
+      console.log("newNodes", newNodes);
+
+      const sourceNode = newNodes.find((node) => node.id === sourceId);
+      const targetNode = newNodes.find((node) => node.id === targetId);
+
+      if (isSourceOrphan && sourceNode) {
+        flashNode(sourceNode, 'red', 1000);
+        console.log("Removing orphan source node", sourceId);
+        newNodes = newNodes.filter((node) => node.id !== sourceId);
+      }
+
+      if (isTargetOrphan && targetNode) {
+        flashNode(targetNode, 'red', 1000);
+        console.log("Removing orphan target node", targetId);
+        newNodes = newNodes.filter((node) => node.id !== targetId);
+      }
+
+      // Edge removal animation
+      d3.select(`line[data-id="${edgeId}"]`)
+        .interrupt()
+        .transition()
+        .duration(500)
+        .style('stroke', 'red')
+        .style('stroke-width', '3px')
+        .transition()
+        .duration(300)
+        .style('stroke-opacity', 0)
+        .style('stroke-width', '0px')
+        .remove();
+
+      // Update state after animations complete
+      setTimeout(() => {
+        setLinks(newLinks);
+        setNodes(newNodes);
+        setIsPruning(false);
+
+        if (simulationRef.current) {
+          simulationRef.current.nodes(newNodes).force('link').links(newLinks);
+          simulationRef.current.alpha(0).restart();
+        }
+      }, 1500);
 
     } catch (error) {
       alert(`Error deleting edge: ${error.message}`);
@@ -517,7 +533,7 @@ export default function SampleGraph() {
   // Placeholder function for handling ToggleGroup value change
   const handleValueChange = (value) => {
     console.log('Selected graph size:', value);
-    // TODO: Implement logic to handle the selected graph size
+    setSelectedValue(value);
   };
 
   const handleDeleteEdge = async (source, target) => {
