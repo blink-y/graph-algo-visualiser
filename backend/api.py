@@ -44,6 +44,9 @@ class CoreStructure(BaseModel):
 class AlgorithmsResponse(BaseModel):
     core_data: Dict[int, CoreStructure]
     timeline: Optional[Dict] = None  # This should be a plain dictionary
+
+class NavigateRequest(BaseModel):
+    node_id: int    
     
 class NavigationStep(BaseModel):
     action: int  # 1=add, 0=remove
@@ -174,15 +177,20 @@ async def get_current_graph():
     return AlgorithmsResponse(core_data=global_core_data, timeline=TIMELINE.root.to_dict())
 
 @app.post("/navigate_to_node", response_model=NavigationResponse)
-async def navigate_to_node(node_id: str):
+async def navigate_to_node(node_id: NavigateRequest):
     global TIMELINE, global_core_data
 
-    target_node = find_node_by_id(TIMELINE.root, int(node_id))
+    target_node = find_node_by_id(TIMELINE.root, node_id.node_id)
     if not target_node:
         raise HTTPException(status_code=404, detail="Node not found")
 
     # Get the planned path (read-only)
-    action_sequence = TIMELINE.get_navigation_path(target_node)
+    raw_sequence = TIMELINE.get_navigation_path(target_node)
+    
+    action_sequence = [
+        NavigationStep(action=action, source=source, target=target)
+        for action, source, target in raw_sequence
+    ]
     
     # Execute the navigation (modifies state)
     TIMELINE.navigate(target_node)
