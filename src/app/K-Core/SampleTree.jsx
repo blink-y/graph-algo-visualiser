@@ -2,16 +2,18 @@ import React, { useRef, useEffect, useState } from "react";
 import * as d3 from "d3";
 import { useTreeStore } from "./store";
 import { TreeHover } from "./treeHoverComponent";
+import { useActionStore } from "./store";
 
-export default function Tree({ height, width, xOffset = 20, yOffset = 10 }) {
+export default function Tree({ height, width, xOffset = 20, yOffset = 100 }) {
   const svgRef = useRef();
   const containerRef = useRef();
+  const gRef = useRef();
   const [hoveredNode, setHoveredNode] = useState(null);
   const [nodePosition, setNodePosition] = useState({ x: 0, y: 0 });
   const { treeData } = useTreeStore();
+  const { setActionData } = useActionStore();
 
   const navigateToNode = async (node) => {
-
     const value = node.data.id;
     console.log("Node ID:", value);
 
@@ -21,10 +23,12 @@ export default function Tree({ height, width, xOffset = 20, yOffset = 10 }) {
       headers: {
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({ node_id: value })
+      body: JSON.stringify({ node_id: String(value) })
     });
+
     const data = await response.json();
-    console.log(data);
+    console.log("Navigation data", data);
+    setActionData(data);
     if (data.success) {
       console.log("Node navigation successful");
     } else {
@@ -40,10 +44,22 @@ export default function Tree({ height, width, xOffset = 20, yOffset = 10 }) {
     treeLayout(root);
 
     const svg = d3.select(svgRef.current);
-    svg.selectAll("*").remove();
+    const g = d3.select(gRef.current);
+    
+    // Clear previous content
+    g.selectAll("*").remove();
+
+    // Set up zoom behavior
+    const zoom = d3.zoom()
+      .scaleExtent([0.1, 8]) // Limit zoom scale
+      .on("zoom", (event) => {
+        g.attr("transform", event.transform);
+      });
+
+    svg.call(zoom);
 
     // Draw links
-    svg.selectAll(".link")
+    g.selectAll(".link")
       .data(root.links())
       .enter()
       .append("path")
@@ -56,7 +72,7 @@ export default function Tree({ height, width, xOffset = 20, yOffset = 10 }) {
       .attr("stroke-width", 2);
 
     // Draw nodes with hover effects
-    const nodes = svg.selectAll(".node")
+    const nodes = g.selectAll(".node")
       .data(root.descendants())
       .enter()
       .append("g")
@@ -84,7 +100,8 @@ export default function Tree({ height, width, xOffset = 20, yOffset = 10 }) {
       .on("click", function(event, d) {
         d3.select(this).attr("fill", "blue");
         navigateToNode(d);
-      })
+        event.stopPropagation();
+      });
 
     nodes.append("text")
       .attr("dy", 4)
@@ -102,14 +119,25 @@ export default function Tree({ height, width, xOffset = 20, yOffset = 10 }) {
       .on("mouseout", function() {
         d3.select(this.closest('.node')).select('circle').attr("fill", "#fff");
         setHoveredNode(null);
+      })
+      .on("click", function(event, d) {
+        event.stopPropagation();
       });
+
+    // Reset zoom to initial position
+    svg.call(zoom.transform, d3.zoomIdentity);
 
   }, [treeData, width, height, xOffset, yOffset]);
 
   return (
     <div ref={containerRef} style={{ position: "relative", width, height }}>
-      <svg ref={svgRef} width={width} height={height}>
-        <g />
+      <svg 
+        ref={svgRef} 
+        width={width} 
+        height={height}
+        style={{ overflow: "visible", cursor: "move" }}
+      >
+        <g ref={gRef} />
       </svg>
       
       {hoveredNode && (

@@ -3,9 +3,8 @@ import * as d3 from 'd3';
 export function createLegend(zoomableGroup, nodes, colorScale) {
     const legend = zoomableGroup.append('g')
       .attr('class', 'legend')
-      .attr('transform', 'translate(20,20)');
+      .attr('transform', 'translate(60,60)');
   
-    // Get unique sorted groups
     const groups = [...new Set(nodes.map(d => d.group))].sort((a, b) => a - b);
   
     // Create legend items
@@ -13,29 +12,29 @@ export function createLegend(zoomableGroup, nodes, colorScale) {
       .data(groups)
       .join('g')
       .attr('class', 'legend-item')
-      .attr('transform', (d, i) => `translate(0,${i * 25})`)
+      .attr('transform', (d, i) => `translate(0,${i * 30})`)
       .each(function(group) {
         const item = d3.select(this);
         
         // Color swatch
         item.append('rect')
-          .attr('width', 18)
-          .attr('height', 18)
-          .attr('rx', 2) // Rounded corners
+          .attr('width', 25)
+          .attr('height', 25)
+          .attr('rx', 5)
           .attr('fill', colorScale(group));
         
         // Group label
         item.append('text')
-          .attr('x', 24)
-          .attr('y', 14)
-          .style('font-size', '12px')
+          .attr('x', 40)
+          .attr('y', 20)
+          .style('font-size', '20px')
           .style('fill', '#333')
           .text(`K- ${group}`);
       });
   
-    // Optional: Add legend title
     legend.append('text')
       .attr('y', -10)
       .style('font-weight', 'bold')
+      .style('font-size', '20px')
       .text('K-Core Groups');
   }

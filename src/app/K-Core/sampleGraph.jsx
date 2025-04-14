@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
-import { useTreeStore } from './store';
+import { useTreeStore, useActionStore } from './store';
 import { processGraphData } from './processGraphData';
 import { flashEdge, flashNode } from './animation';
 import { createLegend } from './graphLegend';
@@ -41,6 +41,7 @@ export default function SampleGraph() {
 
   // Managing Tree State
   const { setTreeData } = useTreeStore();
+  const { ActionData } = useActionStore();
 
   const handleModifyTree = async (data) => {
     setTreeData(data);
@@ -83,11 +84,6 @@ export default function SampleGraph() {
 
     loadData();
   }, [selectedValue]);
-
-  // Add this early in your component
-  // useEffect(() => {
-  //   console.log('Initial pruneQueue:', pruneQueue);
-  // }, []);
 
   const pruneNextEdge = useCallback(() => {
 
@@ -163,7 +159,6 @@ export default function SampleGraph() {
             .forceLink()
             .id((d) => d.id)
             .strength((link) => {
-              // Stronger connections for same-group nodes
               return link.source.group === link.target.group ? 1 : 0.4;
             })
         )
@@ -229,7 +224,7 @@ export default function SampleGraph() {
     node.append('title').text((d) => d.id);
 
     // After creating your nodes/links
-    //createLegend(zoomableGroup, nodes, color);
+    createLegend(zoomableGroup, nodes, color);
 
     const simulation = simulationRef.current;
     simulation.nodes(nodes).force('link').links(links);
@@ -272,8 +267,7 @@ export default function SampleGraph() {
     [pruneNextEdge]
   );
 
-  //Placeholder functions
-  // Placeholder function for adding an edge
+  //function for adding an edge
   const addEdge = async (source, target) => {
     console.log(`Adding edge from ${source} to ${target}`);
     
@@ -310,7 +304,7 @@ export default function SampleGraph() {
     }
   };
 
-  // Placeholder function for deleting an edge
+  //function for deleting an edge
   const deleteEdge = async (sourceId, targetId, algo_running) => {
 
     const deleteEdgeData = { 
@@ -400,61 +394,36 @@ export default function SampleGraph() {
     } catch (error) {
       alert(`Error deleting edge: ${error.message}`);
     }
-
-    // // Find the source and target nodes in the nodes array
-    // const edgeElement = d3.select(`line[data-id="${source}-${target}"]`);
-
-    // // Debugging: Log the selected edge
-    // console.log('Selected Edge:', edgeElement);
-
-    // // Highlight the edge with a flashing effect
-    // if (!edgeElement.empty()) {
-    //   const flash = () => {
-    //     edgeElement
-    //       .transition() // Start a transition
-    //       .duration(200) // Duration of each flash
-    //       .attr('stroke', 'red') // Change edge color to red
-    //       .transition() // Start another transition
-    //       .duration(200) // Duration of each flash
-    //       .attr('stroke', 'black') // Change edge color to black
-    //       .on('end', flash); // Repeat the flashing effect
-    //   };
-
-    //   // Start the flashing effect
-    //   flash();
-
-    //   // Add a delay before deletion
-    //   setTimeout(async () => {
-    //     try {
-    //       const deleteEdgeData = { source, target };
-    //       const response = await fetch('http://localhost:8000/delete_edge', {
-    //         method: 'DELETE',
-    //         headers: {
-    //           'Content-Type': 'application/json',
-    //         },
-    //         body: JSON.stringify(deleteEdgeData),
-    //       });
-    //       const data = await response.json();
-
-    //       // Stop the flashing effect and remove the edge
-    //       edgeElement.interrupt(); // Stop any ongoing transitions
-    //       edgeElement.remove();
-
-    //       console.log('Edge deleted successfully.');
-    //     } catch (error) {
-    //       alert(`Error deleting edge: ${error.message}`);
-
-    //       // Stop the flashing effect and restore original styles
-    //       edgeElement.interrupt(); // Stop any ongoing transitions
-    //       edgeElement
-    //         .attr('stroke', '#999') // Restore original color
-    //         .attr('stroke-width', 2); // Restore original thickness
-    //     }
-    //   }, 5000); // 2000ms (2 seconds) delay for flashing
-    // } else {
-    //   console.error('Edge not found!');
-    // }
   };
+
+  useEffect(() => {
+    const processActions = async () => {
+      if (ActionData && ActionData.action_sequence) {
+        for (const actionItem of ActionData.action_sequence) {
+          try {
+            if (actionItem.action === 0) {
+              await addEdge(
+                actionItem.source,
+                actionItem.target
+              );
+              console.log(`Successfully added edge ${actionItem.source}->${actionItem.target}`);
+            } else if (actionItem.action === 1) {
+              await deleteEdge(
+                actionItem.source,
+                actionItem.target,
+                '1'
+              );
+              console.log(`Successfully deleted edge ${actionItem.source}->${actionItem.target}`);
+            }
+          }
+          catch (error) {
+            console.error(`Error processing action: ${error.message}`);
+          }
+      }
+      }
+    };
+    processActions();
+}, [ActionData, addEdge, deleteEdge]);
 
   // Placeholder function for handling the "Upload Graph" button click
   const handleButtonClick = () => {
@@ -544,49 +513,23 @@ export default function SampleGraph() {
       alert(`Error deleting edge: ${error.message}`);
     }
   }
-  //End of Placeholder functions
-
-  const handleSliderChange = (event) => {
-    const index = parseInt(event.target.value, 10);
-    setCurrentDatasetIndex(index);
-    if (isAutoUpdating) {
-      updateGraph(index); // Only update if auto-update is enabled
-    } else {
-      // Render the new dataset without incremental updates
-      const { nodes: newNodes, links: newLinks } = datasets[index];
-      setNodes(newNodes);
-      setLinks(newLinks);
-    }
-  };
 
   return (
     <div>
       <div className="flex flex-row mb-4 justify-center">
         <Button
           onClick={() => setIsAutoPruning((prev) => !prev)} // Toggle auto-update
-          className="mr-2 mb-2 text-md"
+          className="mr-2 mb-1 text-md"
         >
           {isAutoPruning ? 'Stop Auto-Update' : 'Start Auto-Update'}
         </Button>
         <Button onClick={handlePruneClick} disabled={isAutoPruning}>
           Prune Next Edge
         </Button>
-        <div>
+        <div
+        className="ml-2 mt-1.5 text-md font-bold">
           Progress: {currentPruneStep} / {pruneQueue.length} edges pruned
         </div>
-      </div>
-      <div className="flex flex-row mb-4 justify-center">
-        <input
-          type="range"
-          min="0"
-          max={datasets.length - 1}
-          value={currentDatasetIndex}
-          onChange={handleSliderChange}
-          className="w-64"
-        />
-        <span className="ml-2">
-          {currentDatasetIndex + 1} / {datasets.length}
-        </span>
       </div>
       <div className="flex flex-row">
         <div className="flex-[2] mr-1">
@@ -629,6 +572,7 @@ export default function SampleGraph() {
                 <Button
                   onClick={() => addEdge(addEdgeSource, addEdgeTarget)}
                   className="mt-2 text-md"
+                  disabled={isAutoPruning}
                 >
                   {' '}
                   Add Edge{' '}
@@ -658,12 +602,13 @@ export default function SampleGraph() {
                   type="text"
                   placeholder="Target node"
                   value={deleteEdgeTarget}
-                  style={{ width: '100%' }} // Set width to 100%
+                  style={{ width: '100%' }}
                   onChange={(e) => setDeleteEdgeTarget(e.target.value)}
                 />
               </div>
               <div className="flex pt-4">
                 <Button
+                disabled={isAutoPruning}  
                   onClick={() => handleDeleteEdge(deleteEdgeSource, deleteEdgeTarget)}
                   className="mt-2 text-md"
                 >
@@ -671,23 +616,6 @@ export default function SampleGraph() {
                 </Button>
               </div>
             </div>
-            {/* <div className="flex flex-col">
-                        <div className="flex mr-2 mb-2 mt-2">
-                        <Label htmlFor="deleteNodeId" className="text-md">Delete Node:</Label>
-                        </div>
-                        <div className="flex flex-row mb-2">
-                              <Input
-                                id="deleteNodeId"
-                                type="text"
-                                placeholder="Enter node ID to delete"
-                                value={deleteNodeId}
-                                onChange={e => setDeleteNodeId(e.target.value)}
-                                style={{ width: '50%' }} 
-                                className="mr-2" 
-                              />
-                              <Button className="text-md" onClick={() => deleteNode(deleteNodeId)}>Delete Node</Button>
-                        </div>  
-                    </div> */}
           </div>
           <div className="flex-1 ">
             <div className="mt-3 mb-2">
