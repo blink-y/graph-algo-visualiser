@@ -179,8 +179,6 @@ async def navigate_to_node(node_id: NavigationRequest):
     
     # Return both results
     return NavigationResponse(
-        core_data=graph_utils.run_all_kcores(list(TIMELINE.graph.edges())),
-        timeline=TIMELINE.root.to_dict(),
         action_sequence=action_sequence
     )
 
