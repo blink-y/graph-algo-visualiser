@@ -160,3 +160,4 @@ def update_core_data(old_core_data, affected_nodes, new_local_core_data):
             updated_core_data[k]['edges'].extend(data['edges'])
     
     return updated_core_data
+
