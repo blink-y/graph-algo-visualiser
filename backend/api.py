@@ -45,7 +45,7 @@ class AlgorithmsResponse(BaseModel):
     core_data: Dict[int, CoreStructure]
     timeline: Optional[Dict] = None  # This should be a plain dictionary
 
-class NavigateRequest(BaseModel):
+class NavigationRequest(BaseModel):
     node_id: int    
     
 class NavigationStep(BaseModel):
@@ -177,7 +177,7 @@ async def get_current_graph():
     return AlgorithmsResponse(core_data=global_core_data, timeline=TIMELINE.root.to_dict())
 
 @app.post("/navigate_to_node", response_model=NavigationResponse)
-async def navigate_to_node(node_id: NavigateRequest):
+async def navigate_to_node(node_id: NavigationRequest):
     global TIMELINE, global_core_data
 
     target_node = find_node_by_id(TIMELINE.root, node_id.node_id)

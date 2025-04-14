@@ -67,7 +67,7 @@ class TimeLine:
             if self._is_ancestor(target_node):
                 # Moving up to ancestor - just reverse changes
                 path = self._get_path_to_node(target_node)
-                for node in reversed(path):
+                for node in path:
                     self._reverse_change(node)
             else:
                 # Moving down to descendant - just apply changes
@@ -82,7 +82,7 @@ class TimeLine:
                 path_to_common_ancestor.append(node)
                 node = node.parent
             
-            for node in reversed(path_to_common_ancestor):
+            for node in path_to_common_ancestor:
                 self._reverse_change(node)
             
             path_to_target = []
