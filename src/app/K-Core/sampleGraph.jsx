@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import * as d3 from 'd3';
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, act } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -21,6 +21,7 @@ export default function SampleGraph() {
   const svgRef = useRef(null);
   const simulationRef = useRef(null);
   const intervalRef = useRef(null);
+  const actionProcessingRef = useRef(false);
 
   //Graph State Management
   const [nodes, setNodes] = useState([]);
@@ -41,7 +42,7 @@ export default function SampleGraph() {
 
   // Managing Tree State
   const { setTreeData } = useTreeStore();
-  const { ActionData } = useActionStore();
+  const { actionSequence, clearActionSequence } = useActionStore();
 
   const handleModifyTree = async (data) => {
     setTreeData(data);
@@ -297,7 +298,7 @@ export default function SampleGraph() {
       
       console.log('pruning steps', pruneSteps);
       console.log("Updating Tree State");
-      await handleModifyTree(updatedData.timeline);
+      //await handleModifyTree(updatedData.timeline);
 
     } catch (error) {
       alert(`Error adding edge: ${error.message}`);
@@ -396,34 +397,41 @@ export default function SampleGraph() {
     }
   };
 
+  //Needs use of useCallback to prevent re-renders
   useEffect(() => {
-    const processActions = async () => {
-      if (ActionData && ActionData.action_sequence) {
-        for (const actionItem of ActionData.action_sequence) {
-          try {
-            if (actionItem.action === 0) {
-              await addEdge(
-                actionItem.source,
-                actionItem.target
-              );
-              console.log(`Successfully added edge ${actionItem.source}->${actionItem.target}`);
-            } else if (actionItem.action === 1) {
-              await deleteEdge(
-                actionItem.source,
-                actionItem.target,
-                '1'
-              );
-              console.log(`Successfully deleted edge ${actionItem.source}->${actionItem.target}`);
-            }
+  const processActions = async () => {
+
+    if (!actionSequence?.length || actionProcessingRef.current) return;
+
+    actionProcessingRef.current = true;
+    console.log("Processing action sequence:", actionSequence);
+    
+    try {
+      const sequenceToProcess = [...actionSequence];
+      for (const { action, source, target } of sequenceToProcess) {
+        try {
+          if (parseInt(action) === 1) {
+            await addEdge(source, target);
+          } else if (parseInt(action) === 0) {
+            await deleteEdge(source, target, 1);
           }
-          catch (error) {
-            console.error(`Error processing action: ${error.message}`);
-          }
+          console.log(`Processed action ${action} on ${source}->${target}`);
+        } catch (error) {
+          console.error(`Action ${action} failed:`, error);
+        }
+        await new Promise(resolve => setTimeout(resolve, 500)); // Delay between actions
       }
-      }
-    };
-    processActions();
-}, [ActionData, addEdge, deleteEdge]);
+      
+      await clearActionSequence();
+      console.log("All actions processed successfully");
+      
+    } finally {
+      actionProcessingRef.current = false;
+    }
+  };
+
+  processActions();
+}, [actionSequence]);
 
   // Placeholder function for handling the "Upload Graph" button click
   const handleButtonClick = () => {

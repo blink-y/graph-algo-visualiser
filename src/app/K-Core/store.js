@@ -2,7 +2,7 @@ import { create } from 'zustand';
 
 export const useTreeStore = create((set) => ({
   treeData: null,
-  
+
   setTreeData: (newData) => {
     if (newData && typeof newData === 'object') {
       set({ treeData: newData });
@@ -13,13 +13,20 @@ export const useTreeStore = create((set) => ({
 }));
 
 export const useActionStore = create((set) => ({
-  actionData: null,
-  
-  setActionData: (newData) => {
-    if (newData && typeof newData === 'object') {
-      set({ actionData: newData });
-    } else {
-      console.warn('Invalid action data format:', newData);
+  // Store only the action sequence
+  actionSequence: [],
+  isProcessing: false,
+
+  setActionSequence: (sequence) => {
+    if (Array.isArray(sequence)) {
+      set({ actionSequence: sequence, isProcessing: true });
+      console.log("Action sequence updated:", sequence);
     }
+  },
+
+  // Clear the sequence
+  clearActionSequence: () => {
+    set({ actionSequence: [], isProcessing: false });
+    console.log("Action sequence cleared");
   },
 }));

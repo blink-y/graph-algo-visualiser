@@ -8,13 +8,13 @@ import Menu from "./header";
 import Tree from "./K-Core/SampleTree.jsx";
 
 export default function Page() {
-  const containerRef = useRef(null); 
+  const containerRef = useRef(null);
   const [containerWidth, setContainerWidth] = useState(0);
 
   useEffect(() => {
     const updateWidth = () => {
       if (containerRef.current) {
-        const width = containerRef.current.offsetWidth; 
+        const width = containerRef.current.offsetWidth;
         setContainerWidth(width);
       }
     };
@@ -42,7 +42,7 @@ export default function Page() {
             >
               <h2 className="text-l font-bold mb-4 ml-4 justify-self-center">HISTREE</h2>
               <div className="flex-1 justify-self-center overflow-auto max-h-[400px] max-w-100%">
-              <Tree width={1500} height={200} />
+                <Tree width={1500} height={400} />
               </div>
             </div>
           </div>

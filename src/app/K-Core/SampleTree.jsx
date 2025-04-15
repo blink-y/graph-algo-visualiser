@@ -4,35 +4,35 @@ import { useTreeStore } from "./store";
 import { TreeHover } from "./treeHoverComponent";
 import { useActionStore } from "./store";
 
-export default function Tree({ height, width, xOffset = 20, yOffset = 100 }) {
+export default function Tree({ height, width, xOffset = 20, yOffset = 200 }) {
   const svgRef = useRef();
   const containerRef = useRef();
   const gRef = useRef();
   const [hoveredNode, setHoveredNode] = useState(null);
   const [nodePosition, setNodePosition] = useState({ x: 0, y: 0 });
   const { treeData } = useTreeStore();
-  const { setActionData } = useActionStore();
+  const { setActionSequence, clearActionSequence } = useActionStore();
 
   const navigateToNode = async (node) => {
     const value = node.data.id;
     console.log("Node ID:", value);
 
-    const response = await fetch('http://localhost:8000/navigate_to_node', {
-      method: 'POST',
-      credentials: 'include',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ node_id: String(value) })
-    });
-
-    const data = await response.json();
-    console.log("Navigation data", data);
-    setActionData(data);
-    if (data.success) {
-      console.log("Node navigation successful");
-    } else {
-      console.error("Node navigation failed");
+    try {
+      const response = await fetch('http://localhost:8000/navigate_to_node', {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ node_id: String(value) })
+      });
+  
+      const data = await response.json();
+      useActionStore.getState().setActionSequence(data.action_sequence || []);
+    }
+    catch (error) {
+      console.error("Error navigating to node:", error);
+      useActionStore.getState().clearActionSequence([]);
     }
   };
 
