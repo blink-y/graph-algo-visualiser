@@ -11,6 +11,7 @@ import { useTreeStore, useActionStore } from './store';
 import { processGraphData } from './processGraphData';
 import { flashEdge, flashNode } from './animation';
 import { createLegend } from './graphLegend';
+import { updateDensityVisualization } from './densityGauge';
 
 export default function SampleGraph() {
 
@@ -37,12 +38,14 @@ export default function SampleGraph() {
   const [addEdgeTarget, setAddEdgeTarget] = useState('');
   const [deleteEdgeSource, setDeleteEdgeSource] = useState('');
   const [deleteEdgeTarget, setDeleteEdgeTarget] = useState('');
-  // const [deleteNodeId, setDeleteNodeId] = useState('');
   const fileInputRef = useRef(null);
 
   // Managing Tree State
   const { setTreeData } = useTreeStore();
   const { actionSequence, clearActionSequence } = useActionStore();
+
+  // Graph Stats
+  const [density, setDensity] = useState(0);
 
   const handleModifyTree = async (data) => {
     setTreeData(data);
@@ -142,6 +145,12 @@ export default function SampleGraph() {
     };
   }, [isAutoPruning, currentPruneStep, links, nodes, pruneQueue.length]);
 
+  const calculateDensity = useCallback(() => {
+    const n = nodes.length;
+    if (n < 2) return 0;
+    return (2 * links.length) / (n * (n - 1));
+  }, [nodes, links]);
+
   // Effect to render the graph when Nodes or Links change
   useEffect(() => {
     if (nodes.length === 0 || !svgRef.current) return;
@@ -227,6 +236,10 @@ export default function SampleGraph() {
     // After creating your nodes/links
     createLegend(zoomableGroup, nodes, color);
 
+    const currentDensity = calculateDensity();
+    setDensity(currentDensity);
+    updateDensityVisualization(currentDensity);
+
     const simulation = simulationRef.current;
     simulation.nodes(nodes).force('link').links(links);
     simulation.alpha(1).restart();
@@ -256,7 +269,7 @@ export default function SampleGraph() {
       event.subject.fx = null;
       event.subject.fy = null;
     }
-  }, [nodes, links]);
+  }, [nodes, links, calculateDensity]);
 
   const handlePruneClick = useCallback(
     (e) => {
@@ -286,19 +299,94 @@ export default function SampleGraph() {
       const updatedData = await response.json();
       console.log('Edge added successfully.', updatedData);
 
-      const { nodes, edges, pruneSteps, datasets } = processGraphData(updatedData);
+      const { nodes: newNodes, edges: newEdges, pruneSteps, datasets } = processGraphData(updatedData);
+
+              const animateNodes = () => {
+                return new Promise((resolve) => {
+                    // Flash source and target nodes
+                    flashNode({ id: source }, 'white', 500);
+                    flashNode({ id: target }, 'white', 500);
+                    
+                    // Wait for animation to complete
+                    setTimeout(resolve, 500);
+                });
+            };
+    
+            // 2. Then update the graph after animation
+            await animateNodes();
+
+      setTimeout(() => {
+      
+      console.log('Updated nodes:', nodes);
 
       setDatasets(datasets)
-      setNodes(nodes);
-      setLinks(edges);
+      
+      setLinks((prevEdges) => {
+        const getNodeId = (node) => node?.id || node;
+        const existingEdgeKeys = new Set(
+          prevEdges.map((edge) => 
+            [getNodeId(edge.source), getNodeId(edge.target)].sort().join("→")
+          )
+        );
+      
+        const newEdgesToAdd = newEdges.filter((newEdge) => {
+          const key = [getNodeId(newEdge.source), getNodeId(newEdge.target)].sort().join("→");
+          return !existingEdgeKeys.has(key);
+        });
+      
+        if (newEdgesToAdd.length === 0) {
+          return prevEdges;
+        }
+      
+        return [...prevEdges, ...newEdgesToAdd];
+      });
+      
+      setNodes(prevNodes => {
+        const nodeMap = new Map(prevNodes.map(node => [node.id, node]));
+        const updatedNodes = [];
+        let nodesChanged = false;
+
+        for (const newNode of newNodes) {
+          const existingNode = nodeMap.get(newNode.id)
+          if(!existingNode || existingNode.group !== newNode.group) {
+            nodesChanged = true;
+            if (existingNode) {
+              console.log('Node changed:', newNode.id, 'from', existingNode?.group, 'to', newNode.group);
+              existingNode.group = newNode.group;
+              updatedNodes.push(existingNode)
+            } else {
+              console.log('Node added:', newNode.id, 'group:', newNode.group);
+              updatedNodes.push(newNode);
+            }
+          } else {
+            updatedNodes.push(existingNode);
+          }
+        }
+
+        console.log('Updated nodes:', updatedNodes);
+
+        if (prevNodes.length !== newNodes.length) {
+          nodesChanged = true;
+        }
+
+        return nodesChanged ? updatedNodes :prevNodes;
+      });
+
+
       setPruneQueue(pruneSteps);
       setCurrentPruneStep(0);
       setIsAutoPruning(false);
       setIsPruning(false);
+
+      if (simulationRef.current) {
+        simulationRef.current.nodes(nodes).force('link').links(links);
+        simulationRef.current.alpha(0.5).restart();
+      }
+      }, 0);
       
       console.log('pruning steps', pruneSteps);
       console.log("Updating Tree State");
-      //await handleModifyTree(updatedData.timeline);
+      await handleModifyTree(updatedData.timeline);
 
     } catch (error) {
       alert(`Error adding edge: ${error.message}`);
@@ -540,11 +628,21 @@ export default function SampleGraph() {
         </div>
       </div>
       <div className="flex flex-row">
-        <div className="flex-[2] mr-1">
+        <div className="flex-[2] mr-1" style={{ border: "2px solid black"}}>
           <svg
             ref={svgRef}
             style={{ width: '100%', height: '100%', border: '1px solid black' }}
           />
+                <div className="density-meter">
+        <div 
+          id="density-gauge" 
+          className="gauge-fill"
+          style={{ width: `${density * 100}%` }}
+        />
+        <span className="density-text">
+          Density: {(density * 100).toFixed(1)}%
+        </span>
+      </div>
         </div>
         {/* Sidebar for adding and deleting nodes and edges */}
         <div className="flex-[1] ml-1 place-content-center justify-items-start">

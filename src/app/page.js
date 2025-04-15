@@ -42,7 +42,7 @@ export default function Page() {
             >
               <h2 className="text-l font-bold mb-4 ml-4 justify-self-center">HISTREE</h2>
               <div className="flex-1 justify-self-center overflow-auto max-h-[400px] max-w-100%">
-                <Tree width={1500} height={400} />
+                <Tree width={1500} height={200} />
               </div>
             </div>
           </div>
