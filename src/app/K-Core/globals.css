@@ -110,3 +110,109 @@ body {
   stroke: #fff;
   stroke-width: 1px;
 }
+
+/* Edge Log Panel Styles */
+.edge-log-panel {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 300px; 
+  background-color: rgba(0, 0, 0, 0.8);
+  color: white;
+  border-radius: 5px;
+  font-family: monospace;
+  font-size: 14px;
+  position: relative;
+}
+
+.edge-log-header {
+  position: sticky;
+  top: 0;
+  z-index: 2; 
+  padding: 10px;
+  font-weight: bold;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background-color: rgba(0, 0, 0, 0.9); 
+  border-bottom: 1px solid #333; 
+}
+
+
+.edge-log-content {
+  flex: 1;
+  overflow-y: auto; 
+  padding: 10px;
+  scrollbar-width: thin;
+}
+
+
+.edge-log-entry {
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #444;
+}
+
+
+.edge-log-empty {
+  padding: 15px;
+  text-align: center;
+  color: #aaa;
+  font-style: italic;
+}
+
+
+.edge-log-action {
+  font-weight: bold;
+  margin-bottom: 4px;
+}
+
+
+.edge-log-status-start {
+  color: #fcc419;
+}
+
+.edge-log-status-complete {
+  color: #51cf66;
+}
+
+.edge-log-status-error {
+  color: #ff6b6b;
+}
+
+.edge-log-status-default {
+  color: #adb5bd;
+}
+
+.edge-log-clear-btn {
+  background: none;
+  border: 1px solid white;
+  color: white;
+  border-radius: 3px;
+  padding: 3px 10px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: background-color 0.2s ease;
+}
+
+.edge-log-clear-btn:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.edge-log-content::-webkit-scrollbar {
+  width: 6px;
+}
+
+.edge-log-content::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 3px;
+}
+
+.edge-log-content::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 3px;
+}
+
+.edge-log-content::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}

@@ -12,9 +12,9 @@ import { processGraphData } from './processGraphData';
 import { flashEdge, flashNode } from './animation';
 import { createLegend } from './graphLegend';
 import { updateDensityVisualization } from './densityGauge';
+import LogPanel from './logPanel';
 
 export default function SampleGraph() {
-
   const router = useRouter();
   const [currentDatasetIndex, setCurrentDatasetIndex] = useState(0);
   const [isAutoUpdating, setIsAutoUpdating] = useState(false);
@@ -47,6 +47,9 @@ export default function SampleGraph() {
   // Graph Stats
   const [density, setDensity] = useState(0);
 
+  // Logging
+  const [edgeLogs, setEdgeLogs] = useState([]);
+
   const handleModifyTree = async (data) => {
     setTreeData(data);
   };
@@ -59,28 +62,27 @@ export default function SampleGraph() {
           method: 'POST',
           credentials: 'include',
           headers: {
-            'Content-Type': 'application/json'
+            'Content-Type': 'application/json',
           },
-          body: JSON.stringify({ value: selectedValue })
+          body: JSON.stringify({ value: selectedValue }),
         });
-  
+
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status}`);
         }
-  
+
         const data = await response.json();
         console.log('Initial graph data:', data);
 
         const treeData = data.timeline;
         await handleModifyTree(treeData);
 
-        const processedData = processGraphData(data)
+        const processedData = processGraphData(data);
         console.log('Processed graph data:', processedData);
         setDatasets(data);
         setNodes(processedData.nodes);
         setLinks(processedData.edges);
         setPruneQueue(processedData.pruneSteps);
-  
       } catch (error) {
         console.error('Error fetching initial graph data:', error);
       }
@@ -90,11 +92,10 @@ export default function SampleGraph() {
   }, [selectedValue]);
 
   const pruneNextEdge = useCallback(() => {
-
-    if(isPruning) {
+    if (isPruning) {
       console.log('Already pruning, skipping this step');
       return;
-    };
+    }
 
     setIsPruning(true);
 
@@ -102,10 +103,14 @@ export default function SampleGraph() {
 
     // Use functional update to get the most current state
     setCurrentPruneStep((currentStep) => {
-      
       const currentPruneQueue = pruneQueue;
       console.log('Current prune queue:', currentPruneQueue);
-      console.log('Current step:', currentStep, 'Queue length:', currentPruneQueue.length);
+      console.log(
+        'Current step:',
+        currentStep,
+        'Queue length:',
+        currentPruneQueue.length
+      );
 
       if (currentStep >= currentPruneQueue.length) {
         console.log('All edges pruned');
@@ -121,11 +126,11 @@ export default function SampleGraph() {
       if (!edgeToRemove) {
         console.log('Edge not found in current links:', edgeId);
         setIsPruning(false);
-        return currentStep +1;
-      }    
-      
+        return currentStep + 1;
+      }
+
       const { source, target } = edgeToRemove;
-      // Api Call 
+      // Api Call
       deleteEdge(source.id, target.id, '1');
 
       return currentStep + 1;
@@ -284,7 +289,8 @@ export default function SampleGraph() {
   //function for adding an edge
   const addEdge = async (source, target) => {
     console.log(`Adding edge from ${source} to ${target}`);
-    
+    logEdgeOperation('ADD_EDGE_START', { source, target });
+
     try {
       const newEdge = { source: source, target: target, algo_running: '0' };
       const response = await fetch('http://localhost:8000/add_edge', {
@@ -299,108 +305,134 @@ export default function SampleGraph() {
       const updatedData = await response.json();
       console.log('Edge added successfully.', updatedData);
 
-      const { nodes: newNodes, edges: newEdges, pruneSteps, datasets } = processGraphData(updatedData);
+      const {
+        nodes: newNodes,
+        edges: newEdges,
+        pruneSteps,
+        datasets,
+      } = processGraphData(updatedData);
 
-              const animateNodes = () => {
-                return new Promise((resolve) => {
-                    // Flash source and target nodes
-                    flashNode({ id: source }, 'white', 500);
-                    flashNode({ id: target }, 'white', 500);
-                    
-                    // Wait for animation to complete
-                    setTimeout(resolve, 500);
-                });
-            };
-    
-            // 2. Then update the graph after animation
-            await animateNodes();
+      const animateNodes = () => {
+        return new Promise((resolve) => {
+          flashNode({ id: source }, 'white', 500);
+          flashNode({ id: target }, 'white', 500);
+
+          setTimeout(resolve, 500);
+        });
+      };
+      await animateNodes();
 
       setTimeout(() => {
-      
-      console.log('Updated nodes:', nodes);
+        console.log('Updated nodes:', nodes);
 
-      setDatasets(datasets)
-      
-      setLinks((prevEdges) => {
-        const getNodeId = (node) => node?.id || node;
-        const existingEdgeKeys = new Set(
-          prevEdges.map((edge) => 
-            [getNodeId(edge.source), getNodeId(edge.target)].sort().join("→")
-          )
-        );
-      
-        const newEdgesToAdd = newEdges.filter((newEdge) => {
-          const key = [getNodeId(newEdge.source), getNodeId(newEdge.target)].sort().join("→");
-          return !existingEdgeKeys.has(key);
-        });
-      
-        if (newEdgesToAdd.length === 0) {
-          return prevEdges;
-        }
-      
-        return [...prevEdges, ...newEdgesToAdd];
-      });
-      
-      setNodes(prevNodes => {
-        const nodeMap = new Map(prevNodes.map(node => [node.id, node]));
-        const updatedNodes = [];
-        let nodesChanged = false;
+        setDatasets(datasets);
 
-        for (const newNode of newNodes) {
-          const existingNode = nodeMap.get(newNode.id)
-          if(!existingNode || existingNode.group !== newNode.group) {
-            nodesChanged = true;
-            if (existingNode) {
-              console.log('Node changed:', newNode.id, 'from', existingNode?.group, 'to', newNode.group);
-              existingNode.group = newNode.group;
-              updatedNodes.push(existingNode)
+        setNodes((prevNodes) => {
+          const nodeMap = new Map(prevNodes.map((node) => [node.id, node]));
+          const updatedNodes = [];
+          let nodesChanged = false;
+
+          for (const newNode of newNodes) {
+            const existingNode = nodeMap.get(newNode.id);
+            if (!existingNode || existingNode.group !== newNode.group) {
+              nodesChanged = true;
+              if (existingNode) {
+                console.log(
+                  'Node changed:',
+                  newNode.id,
+                  'from',
+                  existingNode?.group,
+                  'to',
+                  newNode.group
+                );
+                existingNode.group = newNode.group;
+                updatedNodes.push(existingNode);
+              } else {
+                console.log('Node added:', newNode.id, 'group:', newNode.group);
+                updatedNodes.push(newNode);
+              }
             } else {
-              console.log('Node added:', newNode.id, 'group:', newNode.group);
-              updatedNodes.push(newNode);
+              updatedNodes.push(existingNode);
             }
-          } else {
-            updatedNodes.push(existingNode);
           }
+
+          console.log('Updated nodes:', updatedNodes);
+
+          if (prevNodes.length !== newNodes.length) {
+            nodesChanged = true;
+          }
+
+          return nodesChanged ? updatedNodes : prevNodes;
+        });
+
+        setLinks((prevEdges) => {
+          const getNodeId = (node) => node?.id || node;
+          const existingEdgeKeys = new Set(
+            prevEdges.map((edge) =>
+              [getNodeId(edge.source), getNodeId(edge.target)].sort().join('→')
+            )
+          );
+
+          const newEdgesToAdd = newEdges.filter((newEdge) => {
+            const key = [getNodeId(newEdge.source), getNodeId(newEdge.target)]
+              .sort()
+              .join('→');
+            return !existingEdgeKeys.has(key);
+          });
+
+          if (newEdgesToAdd.length === 0) {
+            return prevEdges;
+          }
+
+          return [...prevEdges, ...newEdgesToAdd];
+        });
+
+        setPruneQueue(pruneSteps);
+        setCurrentPruneStep(0);
+        setIsAutoPruning(false);
+        setIsPruning(false);
+
+        if (simulationRef.current) {
+          simulationRef.current.nodes(nodes).force('link').links(links);
+          simulationRef.current.alpha(0.5).restart();
         }
-
-        console.log('Updated nodes:', updatedNodes);
-
-        if (prevNodes.length !== newNodes.length) {
-          nodesChanged = true;
-        }
-
-        return nodesChanged ? updatedNodes :prevNodes;
-      });
-
-
-      setPruneQueue(pruneSteps);
-      setCurrentPruneStep(0);
-      setIsAutoPruning(false);
-      setIsPruning(false);
-
-      if (simulationRef.current) {
-        simulationRef.current.nodes(nodes).force('link').links(links);
-        simulationRef.current.alpha(0.5).restart();
-      }
       }, 0);
-      
+
       console.log('pruning steps', pruneSteps);
-      console.log("Updating Tree State");
+      console.log('Updating Tree State');
       await handleModifyTree(updatedData.timeline);
 
+      logEdgeOperation('ADD_EDGE_COMPLETE', {
+        source,
+        target,
+        newEdgeId: `${source}-${target}`,
+        nodeCount: nodes.length,
+        edgeCount: links.length,
+      });
     } catch (error) {
       alert(`Error adding edge: ${error.message}`);
+      logEdgeOperation('ADD_EDGE_ERROR', {
+        source,
+        target,
+        error: error.message,
+      });
     }
   };
 
   //function for deleting an edge
   const deleteEdge = async (sourceId, targetId, algo_running) => {
+    const deleteEdgeData = {
+      source: sourceId,
+      target: targetId,
+      algo_running: algo_running,
+    };
+    console.log('Delete Edge Data: ', deleteEdgeData);
 
-    const deleteEdgeData = { 
-      source: sourceId, 
-      target: targetId, 
-      algo_running: algo_running };
-    console.log("Delete Edge Data: ", deleteEdgeData);
+    logEdgeOperation('DELETE_EDGE_START', {
+      source: sourceId,
+      target: targetId,
+      algo_running,
+    });
 
     try {
       const response = await fetch('http://localhost:8000/remove_edge', {
@@ -419,14 +451,14 @@ export default function SampleGraph() {
       setDatasets(data);
 
       if (algo_running === '0') {
-      setCurrentPruneStep(0);
-      setIsAutoPruning(false);
-      setIsPruning(false);
+        setCurrentPruneStep(0);
+        setIsAutoPruning(false);
+        setIsPruning(false);
       }
 
-      console.log("Updating Tree State", data.timeline);
+      console.log('Updating Tree State', data.timeline);
       await handleModifyTree(data.timeline);
-      
+
       const edgeId = `${sourceId}-${targetId}`;
       const newLinks = links.filter((link) => link.id !== edgeId);
 
@@ -438,20 +470,20 @@ export default function SampleGraph() {
       );
 
       let newNodes = [...nodes];
-      console.log("newNodes", newNodes);
+      console.log('newNodes', newNodes);
 
       const sourceNode = newNodes.find((node) => node.id === sourceId);
       const targetNode = newNodes.find((node) => node.id === targetId);
 
       if (isSourceOrphan && sourceNode) {
-        flashNode(sourceNode, 'red', 1000);
-        console.log("Removing orphan source node", sourceId);
+        flashNode(sourceNode, 'red', 500);
+        console.log('Removing orphan source node', sourceId);
         newNodes = newNodes.filter((node) => node.id !== sourceId);
       }
 
       if (isTargetOrphan && targetNode) {
-        flashNode(targetNode, 'red', 1000);
-        console.log("Removing orphan target node", targetId);
+        flashNode(targetNode, 'red', 500);
+        console.log('Removing orphan target node', targetId);
         newNodes = newNodes.filter((node) => node.id !== targetId);
       }
 
@@ -478,48 +510,58 @@ export default function SampleGraph() {
           simulationRef.current.nodes(newNodes).force('link').links(newLinks);
           simulationRef.current.alpha(0).restart();
         }
-      }, 1500);
 
+        logEdgeOperation('DELETE_EDGE_COMPLETE', {
+          source: sourceId,
+          target: targetId,
+          edgeId: `${sourceId}-${targetId}`,
+          nodeCount: nodes.length,
+          edgeCount: links.length,
+        });
+      }, 500);
     } catch (error) {
       alert(`Error deleting edge: ${error.message}`);
+      logEdgeOperation('DELETE_EDGE_ERROR', {
+        source: sourceId,
+        target: targetId,
+        error: error.message,
+      });
     }
   };
 
   //Needs use of useCallback to prevent re-renders
   useEffect(() => {
-  const processActions = async () => {
+    const processActions = async () => {
+      if (!actionSequence?.length || actionProcessingRef.current) return;
 
-    if (!actionSequence?.length || actionProcessingRef.current) return;
+      actionProcessingRef.current = true;
+      console.log('Processing action sequence:', actionSequence);
 
-    actionProcessingRef.current = true;
-    console.log("Processing action sequence:", actionSequence);
-    
-    try {
-      const sequenceToProcess = [...actionSequence];
-      for (const { action, source, target } of sequenceToProcess) {
-        try {
-          if (parseInt(action) === 1) {
-            await addEdge(source, target);
-          } else if (parseInt(action) === 0) {
-            await deleteEdge(source, target, 1);
+      try {
+        const sequenceToProcess = [...actionSequence];
+        for (const { action, source, target } of sequenceToProcess) {
+          try {
+            if (parseInt(action) === 1) {
+              await addEdge(source, target);
+            } else if (parseInt(action) === 0) {
+              await deleteEdge(source, target, 1);
+            }
+            console.log(`Processed action ${action} on ${source}->${target}`);
+          } catch (error) {
+            console.error(`Action ${action} failed:`, error);
           }
-          console.log(`Processed action ${action} on ${source}->${target}`);
-        } catch (error) {
-          console.error(`Action ${action} failed:`, error);
+          await new Promise((resolve) => setTimeout(resolve, 500)); // Delay between actions
         }
-        await new Promise(resolve => setTimeout(resolve, 500)); // Delay between actions
-      }
-      
-      await clearActionSequence();
-      console.log("All actions processed successfully");
-      
-    } finally {
-      actionProcessingRef.current = false;
-    }
-  };
 
-  processActions();
-}, [actionSequence]);
+        await clearActionSequence();
+        console.log('All actions processed successfully');
+      } finally {
+        actionProcessingRef.current = false;
+      }
+    };
+
+    processActions();
+  }, [actionSequence]);
 
   // Placeholder function for handling the "Upload Graph" button click
   const handleButtonClick = () => {
@@ -608,13 +650,20 @@ export default function SampleGraph() {
     } catch (error) {
       alert(`Error deleting edge: ${error.message}`);
     }
-  }
+  };
+
+  const logEdgeOperation = (action, details) => {
+    const logEntry = { action, ...details };
+    setEdgeLogs((prevLogs) => [...prevLogs, logEntry]);
+    console.log(`[Edge Operation] ${action}:`, details);
+  };
 
   return (
     <div>
+      {/* Top Bar */}
       <div className="flex flex-row mb-4 justify-center">
         <Button
-          onClick={() => setIsAutoPruning((prev) => !prev)} // Toggle auto-update
+          onClick={() => setIsAutoPruning((prev) => !prev)}
           className="mr-2 mb-1 text-md"
         >
           {isAutoPruning ? 'Stop Auto-Update' : 'Start Auto-Update'}
@@ -622,30 +671,36 @@ export default function SampleGraph() {
         <Button onClick={handlePruneClick} disabled={isAutoPruning}>
           Prune Next Edge
         </Button>
-        <div
-        className="ml-2 mt-1.5 text-md font-bold">
+        <div className="ml-2 mt-1.5 text-md font-bold">
           Progress: {currentPruneStep} / {pruneQueue.length} edges pruned
         </div>
       </div>
-      <div className="flex flex-row">
-        <div className="flex-[2] mr-1" style={{ border: "2px solid black"}}>
+      <div className="flex flex-row h-full">
+        {/* Graph Area */}
+        <div className="flex-[2] mr-1" style={{ border: '2px solid black' }}>
           <svg
             ref={svgRef}
             style={{ width: '100%', height: '100%', border: '1px solid black' }}
           />
-                <div className="density-meter">
-        <div 
-          id="density-gauge" 
-          className="gauge-fill"
-          style={{ width: `${density * 100}%` }}
-        />
-        <span className="density-text">
-          Density: {(density * 100).toFixed(1)}%
-        </span>
-      </div>
         </div>
-        {/* Sidebar for adding and deleting nodes and edges */}
+
+        {/* Sidebar */}
         <div className="flex-[1] ml-1 place-content-center justify-items-start">
+          <div className="flex flex-col mb-4">
+            <h1 className="font-bold mt-4 text-md">Graph Stats</h1>
+            <span> No. of Nodes: {nodes.length}</span>
+            <span> No. of Edges: {links.length}</span>
+            <div className="density-meter">
+              <div
+                id="density-gauge"
+                className="gauge-fill"
+                style={{ width: `${density * 100}%` }}
+              />
+              <span className="density-text">
+                Graph Density: {(density * 100).toFixed(1)}%
+              </span>
+            </div>
+          </div>
           <div className="flex flex-col mb-2 ">
             <div className="flex flex-row mb-2">
               <div className="mr-2">
@@ -714,8 +769,10 @@ export default function SampleGraph() {
               </div>
               <div className="flex pt-4">
                 <Button
-                disabled={isAutoPruning}  
-                  onClick={() => handleDeleteEdge(deleteEdgeSource, deleteEdgeTarget)}
+                  disabled={isAutoPruning}
+                  onClick={() =>
+                    handleDeleteEdge(deleteEdgeSource, deleteEdgeTarget)
+                  }
                   className="mt-2 text-md"
                 >
                   Delete Edge
@@ -763,6 +820,9 @@ export default function SampleGraph() {
                 </ToggleGroupItem>
               </ToggleGroup>
             </div>
+          </div>
+          <div className="mt-4 w-full">
+            <LogPanel logs={edgeLogs} onClear={() => setEdgeLogs([])} />
           </div>
         </div>
       </div>
