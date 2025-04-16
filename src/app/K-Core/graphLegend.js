@@ -3,7 +3,7 @@ import * as d3 from 'd3';
 export function createLegend(zoomableGroup, nodes, colorScale) {
     const legend = zoomableGroup.append('g')
       .attr('class', 'legend')
-      .attr('transform', 'translate(60,60)');
+      .attr('transform', 'translate(10,40)');
   
     const groups = [...new Set(nodes.map(d => d.group))].sort((a, b) => a - b);
   

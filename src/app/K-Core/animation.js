@@ -1,12 +1,29 @@
 import * as d3 from 'd3';
 
-export function flashEdge(source, target, color) {
-    const edgeId = `${source}-${target}`;
-    d3.select(`line[data-id="${edgeId}"]`)
-    .transition().duration(100).style('stroke', color)
-    .transition().duration(100).style('stroke', '#999')
-    .transition().duration(100).style('stroke', color)
-    .transition().duration(100).style('stroke', '#999');
+export function flashEdge(link, color, duration = 1000) {
+    const edgeElement = d3.select(`line[data-id="${link.id}"]`);
+
+    if (edgeElement.empty()) {
+        console.log('Edge not found:', link.id);
+        return;
+    } else {console.log('Edge found:', edgeElement);}
+
+    const flash = () => {
+        edgeElement
+            .transition().duration(50)
+            .style('stroke', color)
+            .style('stroke-width', '1.5px')
+            .transition().duration(50)
+            .style('stroke', 'black')
+            .style('stroke-width', '1.5px')
+            .on('end', flash);
+    };
+
+    flash();
+
+    setTimeout(() => {
+        edgeElement.interrupt();
+    }, duration);
 }
 
 export function flashNode(node, color, duration = 1000) {
@@ -21,10 +38,10 @@ export function flashNode(node, color, duration = 1000) {
         nodeElement
             .transition()
             .attr('r', 7)
-            .duration(100)
+            .duration(50)
             .attr('fill', color)
             .transition()
-            .duration(100)
+            .duration(50)
             .attr('fill', 'black')
             .on('end', flash);
         

@@ -142,7 +142,7 @@ export default function SampleGraph() {
     let intervalId;
 
     if (isAutoPruning) {
-      intervalId = setInterval(pruneNextEdge, 1750);
+      intervalId = setInterval(pruneNextEdge, 1000);
     }
 
     return () => {
@@ -177,17 +177,15 @@ export default function SampleGraph() {
               return link.source.group === link.target.group ? 1 : 0.4;
             })
         )
-        .force('charge', d3.forceManyBody().strength(-75))
+        .force('charge', d3.forceManyBody().strength(-50))
         .force('center', d3.forceCenter(width / 2, height / 2));
     }
 
-    const svg = d3
-      .select(svgRef.current)
-      .attr('width', width)
-      .attr('height', height)
-      .attr('viewBox', [0, 0, width, height])
-      .attr('style', 'max-width: auto; height: auto;')
-      .attr('class', 'responsive-svg');
+    const svg = d3.select(svgRef.current)
+    .attr('width', width)
+    .attr('height', height)
+    .attr('viewBox', [0, 0, width, height])
+    .style('overflow', 'hidden');
 
     svg.selectAll('*').remove();
 
@@ -210,72 +208,74 @@ export default function SampleGraph() {
       // .data(links, d => `${d.source}-${d.target}`)
       // .attr('data-id', d =>`${d.source}-${d.target}`)
       .data(links, (d) => d.id)
-      .attr('data-id', (d) => d.id)
       .join('line')
+      .attr('data-id', d => d.id)
       .attr('stroke-width', 1.5)
       .attr('x1', (d) => d.source.x)
       .attr('y1', (d) => d.source.y)
       .attr('x2', (d) => d.target.x)
       .attr('y2', (d) => d.target.y);
-
+    
+    
     const node = zoomableGroup
-      .append('g')
-      .attr('stroke', '#fff')
-      .attr('stroke-width', 1.5)
-      .selectAll('circle')
-      .data(nodes)
-      .join('circle')
-      .attr('r', 5)
-      .attr('fill', (d) => color(d.group))
-      .attr('data-id', (d) => d.id)
-      .call(
-        d3
-          .drag()
-          .on('start', dragstarted)
-          .on('drag', dragged)
-          .on('end', dragended)
-      );
-
+    .append('g')
+    .attr('stroke', '#fff')
+    .attr('stroke-width', 1.5)
+    .selectAll('circle')
+    .data(nodes)
+    .join('circle')
+    .attr('r', 5)
+    .attr('fill', (d) => color(d.group))
+    .attr('data-id', (d) => d.id)
+    .call(
+      d3
+      .drag()
+      .on('start', dragstarted)
+      .on('drag', dragged)
+      .on('end', dragended)
+    );
+    
     node.append('title').text((d) => d.id);
-
+    
     // After creating your nodes/links
     createLegend(zoomableGroup, nodes, color);
-
+    
     const currentDensity = calculateDensity();
     setDensity(currentDensity);
     updateDensityVisualization(currentDensity);
-
+    
     const simulation = simulationRef.current;
     simulation.nodes(nodes).force('link').links(links);
     simulation.alpha(1).restart();
     simulation.on('tick', () => {
       link
-        .attr('x1', (d) => d.source.x)
-        .attr('y1', (d) => d.source.y)
-        .attr('x2', (d) => d.target.x)
-        .attr('y2', (d) => d.target.y);
-
+      .attr('x1', (d) => d.source.x)
+      .attr('y1', (d) => d.source.y)
+      .attr('x2', (d) => d.target.x)
+      .attr('y2', (d) => d.target.y);
+      
       node.attr('cx', (d) => d.x).attr('cy', (d) => d.y);
     });
-
+    
     function dragstarted(event) {
       if (!event.active) simulation.alphaTarget(0.3).restart();
       event.subject.fx = event.subject.x;
       event.subject.fy = event.subject.y;
     }
-
+    
     function dragged(event) {
       event.subject.fx = event.x;
       event.subject.fy = event.y;
     }
-
+    
     function dragended(event) {
       if (!event.active) simulation.alphaTarget(0);
       event.subject.fx = null;
       event.subject.fy = null;
     }
+    
   }, [nodes, links, calculateDensity]);
-
+  
   const handlePruneClick = useCallback(
     (e) => {
       e.preventDefault();
@@ -287,12 +287,12 @@ export default function SampleGraph() {
   );
 
   //function for adding an edge
-  const addEdge = async (source, target) => {
+  const addEdge = async (source, target, algo_running) => {
     console.log(`Adding edge from ${source} to ${target}`);
     logEdgeOperation('ADD_EDGE_START', { source, target });
 
     try {
-      const newEdge = { source: source, target: target, algo_running: '0' };
+      const newEdge = { source: source, target: target, algo_running: algo_running };
       const response = await fetch('http://localhost:8000/add_edge', {
         method: 'POST',
         credentials: 'include',
@@ -400,7 +400,10 @@ export default function SampleGraph() {
 
       console.log('pruning steps', pruneSteps);
       console.log('Updating Tree State');
+
+      if (algo_running === '0' || algo_running === '1') {
       await handleModifyTree(updatedData.timeline);
+      }
 
       logEdgeOperation('ADD_EDGE_COMPLETE', {
         source,
@@ -443,12 +446,18 @@ export default function SampleGraph() {
         },
         body: JSON.stringify(deleteEdgeData),
       });
-      const data = await response.json();
-      console.log('Edge deleted successfully.', data);
+      const updatedData = await response.json();
+      console.log('Edge deleted successfully.', updatedData);
 
-      const processedData = processGraphData(data);
-      setPruneQueue(processedData.pruneSteps);
-      setDatasets(data);
+      const {
+        nodes: newNodes,
+        edges: newEdges,
+        pruneSteps,
+        datasets,
+      } = processGraphData(updatedData);
+
+      setPruneQueue(pruneSteps);
+      setDatasets(datasets);
 
       if (algo_running === '0') {
         setCurrentPruneStep(0);
@@ -456,11 +465,17 @@ export default function SampleGraph() {
         setIsPruning(false);
       }
 
-      console.log('Updating Tree State', data.timeline);
-      await handleModifyTree(data.timeline);
+      console.log('Updating Tree State', updatedData.timeline);
+      if (algo_running === '0' || algo_running === '1') {
+        await handleModifyTree(updatedData.timeline);
+      }
 
       const edgeId = `${sourceId}-${targetId}`;
       const newLinks = links.filter((link) => link.id !== edgeId);
+
+      const edgeToFlash = links.find(l => l.source.id === sourceId && l.target.id === targetId);
+      console.log(edgeToFlash)
+      flashEdge(edgeToFlash, 'red', 500);
 
       const isSourceOrphan = !newLinks.some(
         (link) => link.source.id === sourceId || link.target.id === sourceId
@@ -469,22 +484,22 @@ export default function SampleGraph() {
         (link) => link.source.id === targetId || link.target.id === targetId
       );
 
-      let newNodes = [...nodes];
-      console.log('newNodes', newNodes);
+      let currentNodes = [...nodes];
+      console.log('newNodes', currentNodes);
 
-      const sourceNode = newNodes.find((node) => node.id === sourceId);
-      const targetNode = newNodes.find((node) => node.id === targetId);
+      const sourceNode = currentNodes.find((node) => node.id === sourceId);
+      const targetNode = currentNodes.find((node) => node.id === targetId);
 
       if (isSourceOrphan && sourceNode) {
         flashNode(sourceNode, 'red', 500);
         console.log('Removing orphan source node', sourceId);
-        newNodes = newNodes.filter((node) => node.id !== sourceId);
+        currentNodes = currentNodes.filter((node) => node.id !== sourceId);
       }
 
       if (isTargetOrphan && targetNode) {
         flashNode(targetNode, 'red', 500);
         console.log('Removing orphan target node', targetId);
-        newNodes = newNodes.filter((node) => node.id !== targetId);
+        currentNodes = currentNodes.filter((node) => node.id !== targetId);
       }
 
       // Edge removal animation
@@ -503,7 +518,44 @@ export default function SampleGraph() {
       // Update state after animations complete
       setTimeout(() => {
         setLinks(newLinks);
-        setNodes(newNodes);
+
+        if (algo_running === '1') {
+        console.log('Pruning goin on')
+        setNodes(currentNodes);}
+        else {
+          console.log('Manual Delete')
+          setNodes((prevNodes) => {
+            const nodeMap = new Map(prevNodes.map((node) => [node.id, node]));
+            const updatedNodes = [];
+            let nodesChanged = false;
+  
+            for (const newNode of newNodes) {
+              const existingNode = nodeMap.get(newNode.id);
+              if (existingNode.group !== newNode.group) {
+                console.log(
+                  'Node group changed:',
+                  newNode.id,
+                  'from',
+                  existingNode.group,
+                  'to',
+                  newNode.group
+                );
+                nodesChanged = true;
+                existingNode.group = newNode.group;
+                updatedNodes.push(existingNode);
+              }
+              else {
+                updatedNodes.push(existingNode);
+              }
+            }
+  
+            if (prevNodes.length !== newNodes.length) {
+              nodesChanged = true;
+            }
+  
+            return nodesChanged ? updatedNodes : prevNodes;
+          });
+        }
         setIsPruning(false);
 
         if (simulationRef.current) {
@@ -529,7 +581,7 @@ export default function SampleGraph() {
     }
   };
 
-  //Needs use of useCallback to prevent re-renders
+  //Needs useCallback to prevent re-renders
   useEffect(() => {
     const processActions = async () => {
       if (!actionSequence?.length || actionProcessingRef.current) return;
@@ -542,15 +594,15 @@ export default function SampleGraph() {
         for (const { action, source, target } of sequenceToProcess) {
           try {
             if (parseInt(action) === 1) {
-              await addEdge(source, target);
+              await addEdge(source, target, "2");
             } else if (parseInt(action) === 0) {
-              await deleteEdge(source, target, 1);
+              await deleteEdge(source, target, 2);
             }
             console.log(`Processed action ${action} on ${source}->${target}`);
           } catch (error) {
             console.error(`Action ${action} failed:`, error);
           }
-          await new Promise((resolve) => setTimeout(resolve, 500)); // Delay between actions
+          await new Promise((resolve) => setTimeout(resolve, 500));
         }
 
         await clearActionSequence();
@@ -563,19 +615,19 @@ export default function SampleGraph() {
     processActions();
   }, [actionSequence]);
 
-  // Placeholder function for handling the "Upload Graph" button click
+  //for handling the "Upload Graph" button click
   const handleButtonClick = () => {
     console.log('Upload Graph button clicked');
     // TODO: Implement logic to trigger file upload
   };
 
-  // Placeholder function for clearing the graph
+  //for clearing the graph
   const clearSvg = () => {
     console.log('Clear Graph button clicked');
     d3.select(svgRef.current).selectAll('*').remove();
   };
 
-  // Placeholder function for exporting the graph as an SVG
+  //for exporting the graph as an SVG
   const exportSvg = () => {
     console.log('Export Graph button clicked');
 
@@ -587,15 +639,15 @@ export default function SampleGraph() {
 
       const link = document.createElement('a');
       link.href = url;
-      link.download = 'graph.svg'; // Specify the filename
+      link.download = 'graph.svg';
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-      URL.revokeObjectURL(url); // Clean up the URL object
+      URL.revokeObjectURL(url);
     }
   };
 
-  // Placeholder function for exporting the graph data
+  //for exporting the graph data
   const exportGraphData = async () => {
     console.log('Export Graph Data button clicked');
 
@@ -675,12 +727,13 @@ export default function SampleGraph() {
           Progress: {currentPruneStep} / {pruneQueue.length} edges pruned
         </div>
       </div>
-      <div className="flex flex-row h-full">
+      <div className="flex flex-row h-full w-full">
+        
         {/* Graph Area */}
-        <div className="flex-[2] mr-1" style={{ border: '2px solid black' }}>
+        <div className="flex-[2] mr-1 min-h-0 min-w-0 relative" style={{ border: '2px solid black' }}>
           <svg
             ref={svgRef}
-            style={{ width: '100%', height: '100%', border: '1px solid black' }}
+            className="absolute w-full h-full"
           />
         </div>
 
@@ -731,7 +784,7 @@ export default function SampleGraph() {
               </div>
               <div className="flex pt-4">
                 <Button
-                  onClick={() => addEdge(addEdgeSource, addEdgeTarget)}
+                  onClick={() => addEdge(addEdgeSource, addEdgeTarget, '0')}
                   className="mt-2 text-md"
                   disabled={isAutoPruning}
                 >

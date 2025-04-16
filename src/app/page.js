@@ -27,12 +27,12 @@ export default function Page() {
   }, []);
 
   return (
-    <div className="container mx-auto p-4">
+    <div className="container mx-auto p-1">
       <div className="mb-4">
         <h1 className="text-2xl font-bold mb-4 ml-4 justify-self-center">Graph Algorithm Visualizer</h1>
         <div className="flex items-start mt-4">
           <div className="flex flex-col">
-            <div className="flex-1" style={{ border: "2px solid black", padding: "10px" }}>
+            <div className="flex-1 h-full w-full" style={{ border: "2px solid black", padding: "10px" }}>
               <SampleGraph />
             </div>
             <div
@@ -42,7 +42,7 @@ export default function Page() {
             >
               <h2 className="text-l font-bold mb-4 ml-4 justify-self-center">HISTREE</h2>
               <div className="flex-1 justify-self-center overflow-auto max-h-[400px] max-w-100%">
-                <Tree width={1500} height={200} />
+                <Tree width={1500} height={250} />
               </div>
             </div>
           </div>

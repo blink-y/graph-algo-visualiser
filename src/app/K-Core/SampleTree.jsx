@@ -4,7 +4,7 @@ import { useTreeStore } from "./store";
 import { TreeHover } from "./treeHoverComponent";
 import { useActionStore } from "./store";
 
-export default function Tree({ height, width, xOffset = 20, yOffset = 100 }) {
+export default function Tree({ height, width, xOffset = 20, yOffset = 125 }) {
   const svgRef = useRef();
   const containerRef = useRef();
   const gRef = useRef();
