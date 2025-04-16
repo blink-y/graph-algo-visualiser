@@ -1,3 +1,5 @@
+import json
+
 def parse_graph_data(data):
     edge_lines = data.strip().split('\n')
     edges = [tuple(map(int, line.split())) for line in edge_lines]
@@ -16,6 +18,11 @@ def generate_all_edges(edges):
             all_edges.append((node_list[i], node_list[j]))
 
     return all_edges
+
+def save_to_json(data, filename):
+    with open(filename, 'w') as f:
+        json.dump(data, f, indent=2)
+    print(f"Data successfully saved to {filename}")
 
 # Example graph data
 graph_data = """
@@ -3036,14 +3043,11 @@ graph_data = """
 998 126
 998 540
 999 999
-
 """
 
-# Parse the graph data
+# Process the data
 parsed_edges = parse_graph_data(graph_data)
-
-# Generate formatted edges
 formatted_edges = generate_all_edges(parsed_edges)
 
-# Print the results
-print(formatted_edges)
+# Save to JSON file
+save_to_json(formatted_edges, 'graphs/sample_graph3.json')
