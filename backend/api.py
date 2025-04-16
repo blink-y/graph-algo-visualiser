@@ -139,7 +139,7 @@ async def add_edge(edge_op: EdgeOperation):
         global_core_data = graph_utils.run_all_kcores(list(TIMELINE.graph.edges()))
         return AlgorithmsResponse(core_data=global_core_data, timeline=TIMELINE.root.to_dict())
     else:
-        TIMELINE.graph.remove_edge(edge_op.source, edge_op.target)
+        TIMELINE.graph.add_edge(edge_op.source, edge_op.target)
         global_core_data = graph_utils.run_all_kcores(list(TIMELINE.graph.edges()))
         return AlgorithmsResponse(core_data=global_core_data, timeline=TIMELINE.root.to_dict())
 
