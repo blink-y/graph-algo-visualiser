@@ -188,7 +188,7 @@ async def navigate_to_node(node_id: NavigationRequest):
     ]
     
     # Execute the navigation (modifies state)
-    # TIMELINE.navigate(target_node)
+    TIMELINE.current_node = target_node
     
     # Return both results
     return NavigationResponse(

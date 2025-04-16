@@ -163,36 +163,101 @@ class TimeLine:
             return []
 
         action_sequence = []
-        current = self.current_node
         
-        # Phase 1: Walk up to common ancestor (exactly matching navigate()'s logic)
-        up_path = []
-        while current != target_node and current.parent is not None:
-            up_path.append(current)
-            current = current.parent
-        
-        # Phase 2: Walk down to target (matching navigate()'s logic)
-        down_path = []
-        temp = target_node
-        while temp != current and temp.parent is not None:
-            down_path.append(temp)
-            temp = temp.parent
-        down_path.reverse()  # Because we built it from target up
+        if self._is_in_branch(target_node):
+            # Same branch navigation
+            if self._is_ancestor(target_node):
+                # Moving up to ancestor
+                path = self._get_path_to_node(target_node)
+                for node in reversed(path):
+                    action_sequence.append([
+                        1 if node.action == 0 else 0,  # Inverse action
+                        node.source_node,
+                        node.target_node
+                    ])
+            else:
+                # Moving down to descendant
+                path = self._get_path_from_node(target_node)
+                for node in path:
+                    action_sequence.append([
+                        node.action,
+                        node.source_node,
+                        node.target_node
+                    ])
+        else:
+            # Find the lowest common ancestor
+            current_ancestors = {}  # Map node to its depth
+            depth = 0
+            node = self.current_node
+            while node is not None:
+                current_ancestors[node] = depth
+                depth += 1
+                node = node.parent
+                
+            # Find the lowest common ancestor by walking up from target_node
+            target_path = []
+            node = target_node
+            lca = None
+            while node is not None:
+                if node in current_ancestors:
+                    lca = node
+                    break
+                target_path.append(node)
+                node = node.parent
+                
+            if lca is None:
+                raise ValueError("No common ancestor found, which should not happen")
+                
+            # Path from current node to LCA
+            current_path = []
+            node = self.current_node
+            while node != lca:
+                current_path.append(node)
+                node = node.parent
+            
+            # Generate actions for upward path (current to LCA)
+            for node in current_path:
+                action_sequence.append([
+                    1 if node.action == 0 else 0,  # Inverse action
+                    node.source_node,
+                    node.target_node
+                ])
+            
+            # Generate actions for downward path (LCA to target)
+            for node in reversed(target_path):
+                action_sequence.append([
+                    node.action,
+                    node.source_node,
+                    node.target_node
+                ])
+            # # Phase 1: Walk up to common ancestor (exactly matching navigate()'s logic)
+            # up_path = []
+            # while current != target_node and current.parent is not None:
+            #     up_path.append(current)
+            #     current = current.parent
+            
+            # # Phase 2: Walk down to target (matching navigate()'s logic)
+            # down_path = []
+            # temp = target_node
+            # while temp != current and temp.parent is not None:
+            #     down_path.append(temp)
+            #     temp = temp.parent
+            # down_path.reverse()  # Because we built it from target up
 
-        # Generate actions without executing anything
-        for node in reversed(up_path):  # Same order as navigate()'s reversal
-            action_sequence.append([
-                1 if node.action == 0 else 0,  # Inverse action
-                node.source_node,
-                node.target_node
-            ])
-        
-        for node in down_path:  # Same order as navigate()'s application
-            action_sequence.append([
-                node.action,
-                node.source_node,
-                node.target_node
-            ])
+            # # Generate actions without executing anything
+            # for node in reversed(up_path):  # Same order as navigate()'s reversal
+            #     action_sequence.append([
+            #         1 if node.action == 0 else 0,  # Inverse action
+            #         node.source_node,
+            #         node.target_node
+            #     ])
+            
+            # for node in down_path:  # Same order as navigate()'s application
+            #     action_sequence.append([
+            #         node.action,
+            #         node.source_node,
+            #         node.target_node
+            #     ])
         
         return action_sequence
 
