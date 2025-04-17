@@ -60,11 +60,11 @@ class NavigationStep(BaseModel):
 class NavigationResponse(BaseModel):
     action_sequence: List[NavigationStep]
 
-class TrussNodes(BaseModel):
+class TrussComponent(BaseModel):
     nodes: List[int]
 
 class TrussResponse(BaseModel):
-    truss_data: Dict[int, TrussNodes]
+    polygon_data: Dict[int, List[TrussComponent]]
 
 @app.post("/initialize_graph", response_model=AlgorithmsResponse)
 async def initialize_graph(value: Value):
@@ -225,14 +225,5 @@ async def upload_graph(edges: EdgeList):
 
 @app.get("/polygon", response_model=TrussResponse)
 async def get_truss_data():
-    """
-    Compute its k-core structure.
-    """
-    
-    # Compute core data
     truss_data = graph_utils.run_all_ktrusses(TIMELINE.graph.edges())
-    
-    # Return response with empty timeline (root has no children)
-    return TrussResponse(
-        truss_data=truss_data
-    )
+    return TrussResponse(polygon_data=truss_data)

@@ -164,18 +164,42 @@ def update_core_data(old_core_data, affected_nodes, new_local_core_data):
 def run_all_ktrusses(edges):
     G = generate_graph(edges)
     all_trusses = {}
-    k = 1
     
+    # Find the maximum possible k-truss
+    max_k = 0
     while True:
-        truss = get_kcore(G, k)
-        edges_in_truss = list(truss.edges())
-        
-        if not edges_in_truss:
+        try:
+            truss = nx.algorithms.core.k_truss(G, max_k + 2)
+            if truss.number_of_edges() == 0:
+                break
+            max_k += 1
+        except:
             break
-            
-        all_trusses[k] = {
-            'nodes': set(truss.nodes()),
-        }
-        k += 1
+    
+    # For each k from 1 to max_k
+    for k in range(1, max_k + 1):
+        truss = nx.algorithms.core.k_truss(G, k + 2)
+        
+        # Find all maximal cliques of size at least 3 as potential truss cores
+        cliques = list(nx.find_cliques(truss))
+        cliques = [c for c in cliques if len(c) >= 3]
+        
+        # Merge overlapping cliques to form truss clusters
+        clusters = []
+        for clique in sorted(cliques, key=lambda x: -len(x)):
+            found = False
+            for cluster in clusters:
+                if len(set(clique) & set(cluster)) >= 2:  # Shares at least 2 nodes
+                    cluster.update(clique)
+                    found = True
+                    break
+            if not found:
+                clusters.append(set(clique))
+        
+        # Convert back to lists and filter small clusters
+        clusters = [list(c) for c in clusters if len(c) >= 3]
+        
+        if clusters:
+            all_trusses[k] = [{'nodes': cluster} for cluster in clusters]
     
     return all_trusses
