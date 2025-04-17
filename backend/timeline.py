@@ -169,7 +169,7 @@ class TimeLine:
             if self._is_ancestor(target_node):
                 # Moving up to ancestor
                 path = self._get_path_to_node(target_node)
-                for node in reversed(path):
+                for node in path:
                     action_sequence.append([
                         1 if node.action == 0 else 0,  # Inverse action
                         node.source_node,
@@ -178,7 +178,7 @@ class TimeLine:
             else:
                 # Moving down to descendant
                 path = self._get_path_from_node(target_node)
-                for node in path:
+                for node in reversed(path):
                     action_sequence.append([
                         node.action,
                         node.source_node,
@@ -230,34 +230,6 @@ class TimeLine:
                     node.source_node,
                     node.target_node
                 ])
-            # # Phase 1: Walk up to common ancestor (exactly matching navigate()'s logic)
-            # up_path = []
-            # while current != target_node and current.parent is not None:
-            #     up_path.append(current)
-            #     current = current.parent
-            
-            # # Phase 2: Walk down to target (matching navigate()'s logic)
-            # down_path = []
-            # temp = target_node
-            # while temp != current and temp.parent is not None:
-            #     down_path.append(temp)
-            #     temp = temp.parent
-            # down_path.reverse()  # Because we built it from target up
-
-            # # Generate actions without executing anything
-            # for node in reversed(up_path):  # Same order as navigate()'s reversal
-            #     action_sequence.append([
-            #         1 if node.action == 0 else 0,  # Inverse action
-            #         node.source_node,
-            #         node.target_node
-            #     ])
-            
-            # for node in down_path:  # Same order as navigate()'s application
-            #     action_sequence.append([
-            #         node.action,
-            #         node.source_node,
-            #         node.target_node
-            #     ])
         
         return action_sequence
 

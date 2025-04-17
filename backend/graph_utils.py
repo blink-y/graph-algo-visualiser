@@ -161,3 +161,21 @@ def update_core_data(old_core_data, affected_nodes, new_local_core_data):
     
     return updated_core_data
 
+def run_all_ktrusses(edges):
+    G = generate_graph(edges)
+    all_trusses = {}
+    k = 1
+    
+    while True:
+        truss = get_kcore(G, k)
+        edges_in_truss = list(truss.edges())
+        
+        if not edges_in_truss:
+            break
+            
+        all_trusses[k] = {
+            'nodes': set(truss.nodes()),
+        }
+        k += 1
+    
+    return all_trusses
