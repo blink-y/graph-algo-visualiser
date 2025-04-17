@@ -19,9 +19,13 @@ export default function SampleGraph() {
   const [currentDatasetIndex, setCurrentDatasetIndex] = useState(0);
   const [isAutoUpdating, setIsAutoUpdating] = useState(false);
   const [datasets, setDatasets] = useState([]);
+
+  //Refs
   const svgRef = useRef(null);
   const simulationRef = useRef(null);
   const intervalRef = useRef(null);
+  const linksRef = useRef([]);
+  const nodesRef = useRef([]);
   const actionProcessingRef = useRef(false);
 
   //Graph State Management
@@ -72,13 +76,13 @@ export default function SampleGraph() {
         }
 
         const data = await response.json();
-        console.log('Initial graph data:', data);
+        //console.log('Initial graph data:', data);
 
         const treeData = data.timeline;
         await handleModifyTree(treeData);
 
         const processedData = processGraphData(data);
-        console.log('Processed graph data:', processedData);
+        //console.log('Processed graph data:', processedData);
         setDatasets(data);
         setNodes(processedData.nodes);
         setLinks(processedData.edges);
@@ -93,27 +97,27 @@ export default function SampleGraph() {
 
   const pruneNextEdge = useCallback(() => {
     if (isPruning) {
-      console.log('Already pruning, skipping this step');
+      //console.log('Already pruning, skipping this step');
       return;
     }
 
     setIsPruning(true);
 
-    console.log('--- Prune Start ---');
+    //console.log('--- Prune Start ---');
 
     // Use functional update to get the most current state
     setCurrentPruneStep((currentStep) => {
       const currentPruneQueue = pruneQueue;
-      console.log('Current prune queue:', currentPruneQueue);
-      console.log(
-        'Current step:',
-        currentStep,
-        'Queue length:',
-        currentPruneQueue.length
-      );
+      //console.log('Current prune queue:', currentPruneQueue);
+      //console.log(
+      //   'Current step:',
+      //   currentStep,
+      //   'Queue length:',
+      //   currentPruneQueue.length
+      // );
 
       if (currentStep >= currentPruneQueue.length) {
-        console.log('All edges pruned');
+        //console.log('All edges pruned');
         alert('All edges pruned');
         setIsAutoPruning(false);
         setIsPruning(false);
@@ -124,7 +128,7 @@ export default function SampleGraph() {
       let edgeToRemove = links.find((link) => link.id === edgeId);
 
       if (!edgeToRemove) {
-        console.log('Edge not found in current links:', edgeId);
+        //console.log('Edge not found in current links:', edgeId);
         setIsPruning(false);
         return currentStep + 1;
       }
@@ -287,8 +291,8 @@ export default function SampleGraph() {
   );
 
   //function for adding an edge
-  const addEdge = async (source, target, algo_running) => {
-    console.log(`Adding edge from ${source} to ${target}`);
+  const addEdge = async (source, target, algo_running, signal) => {
+    if (signal?.aborted) throw new Error('Operation cancelled');
     logEdgeOperation('ADD_EDGE_START', { source, target });
 
     try {
@@ -303,7 +307,7 @@ export default function SampleGraph() {
       });
 
       const updatedData = await response.json();
-      console.log('Edge added successfully.', updatedData);
+      console.log('Post-Add Graph Data', updatedData);
 
       const {
         nodes: newNodes,
@@ -311,6 +315,13 @@ export default function SampleGraph() {
         pruneSteps,
         datasets,
       } = processGraphData(updatedData);
+
+      console.log('Processed graph data after adding edge:', {
+        nodes: newNodes,
+        edges: newEdges,
+        pruneSteps,
+        datasets,
+      });
 
       const animateNodes = () => {
         return new Promise((resolve) => {
@@ -323,10 +334,7 @@ export default function SampleGraph() {
       await animateNodes();
 
       setTimeout(() => {
-        console.log('Updated nodes:', nodes);
-
         setDatasets(datasets);
-
         setNodes((prevNodes) => {
           const nodeMap = new Map(prevNodes.map((node) => [node.id, node]));
           const updatedNodes = [];
@@ -356,7 +364,7 @@ export default function SampleGraph() {
             }
           }
 
-          console.log('Updated nodes:', updatedNodes);
+          //console.log('Updated nodes:', updatedNodes);
 
           if (prevNodes.length !== newNodes.length) {
             nodesChanged = true;
@@ -366,25 +374,33 @@ export default function SampleGraph() {
         });
 
         setLinks((prevEdges) => {
-          const getNodeId = (node) => node?.id || node;
-          const existingEdgeKeys = new Set(
-            prevEdges.map((edge) =>
-              [getNodeId(edge.source), getNodeId(edge.target)].sort().join('→')
-            )
+
+          console.log('Previous edges in the Graph:', prevEdges);
+          console.log('New edges from API:', newEdges);
+
+          const existingKeys = new Set(
+            prevEdges.map(edge => {
+              const src = typeof edge.source === 'object' ? edge.source.id : edge.source;
+              const tgt = typeof edge.target === 'object' ? edge.target.id : edge.target;
+              return [src, tgt].sort().join('-');
+            })
           );
-
-          const newEdgesToAdd = newEdges.filter((newEdge) => {
-            const key = [getNodeId(newEdge.source), getNodeId(newEdge.target)]
-              .sort()
-              .join('→');
-            return !existingEdgeKeys.has(key);
+        
+          // Filter new edges
+          const newEdgesToAdd = newEdges.filter(newEdge => {
+            const src = typeof newEdge.source === 'object' ? newEdge.source.id : newEdge.source;
+            const tgt = typeof newEdge.target === 'object' ? newEdge.target.id : newEdge.target;
+            return !existingKeys.has([src, tgt].sort().join('-'));
           });
+        
+          // DEBUG: Log what's being added
+          console.log('Adding new edges:', newEdgesToAdd.map(e => e.id));
 
-          if (newEdgesToAdd.length === 0) {
-            return prevEdges;
-          }
-
-          return [...prevEdges, ...newEdgesToAdd];
+          const updatedEdges = [...prevEdges, ...newEdgesToAdd];
+          console.log('Total edges after addition:', updatedEdges.length); // Edge count
+          console.log('All edges after addition:', updatedEdges); // All edges
+          
+          return updatedEdges;
         });
 
         setPruneQueue(pruneSteps);
@@ -396,14 +412,19 @@ export default function SampleGraph() {
           simulationRef.current.nodes(nodes).force('link').links(links);
           simulationRef.current.alpha(0.5).restart();
         }
-      }, 0);
 
-      console.log('pruning steps', pruneSteps);
-      console.log('Updating Tree State');
+        console.log('Final edge count after state update:', links.length);
+        console.log('Final edges after state update:', links);
+      }, 200);
 
+      console.log('link after setting:', links);
       if (algo_running === '0' || algo_running === '1') {
-      await handleModifyTree(updatedData.timeline);
+        console.log('Updating Tree State');
+        await handleModifyTree(updatedData.timeline);
       }
+
+      console.log('Final edge count:', links.length);
+      console.log('Final edges:', links);
 
       logEdgeOperation('ADD_EDGE_COMPLETE', {
         source,
@@ -422,29 +443,44 @@ export default function SampleGraph() {
     }
   };
 
-  //function for deleting an edge
-  const deleteEdge = async (sourceId, targetId, algo_running) => {
-    const deleteEdgeData = {
-      source: sourceId,
-      target: targetId,
-      algo_running: algo_running,
-    };
-    console.log('Delete Edge Data: ', deleteEdgeData);
-
-    logEdgeOperation('DELETE_EDGE_START', {
-      source: sourceId,
-      target: targetId,
-      algo_running,
+  useEffect(() => {
+    linksRef.current = links;
+    nodesRef.current = nodes;
+    console.log('Ref: Current Links and Nodes', {
+      links: linksRef.current,
+      nodes: nodesRef.current,
     });
+  }, [links, nodes]);
+
+  //function for deleting an edge
+  const deleteEdge = async (sourceId, targetId, algo_running, signal) => {
+    if(signal?.aborted) throw new Error('Operation cancelled')
+    
+    const edgeId = `${sourceId}-${targetId}`;
+    logEdgeOperation('DELETE_EDGE_START', {source: sourceId,target: targetId,algo_running,});
 
     try {
+
+      const currentLinks = [...linksRef.current];
+      const currentNodes = [...nodesRef.current];
+
+      const edgeIndex = currentLinks.findIndex(link => link.id === edgeId);
+      if (edgeIndex === -1) {
+        console.warn('Edge not found for deletion:', edgeId);
+        return;
+      }
+
       const response = await fetch('http://localhost:8000/remove_edge', {
         method: 'POST',
         credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(deleteEdgeData),
+        body: JSON.stringify({
+          source: sourceId,
+          target: targetId,
+          algo_running
+        }),
       });
       const updatedData = await response.json();
       console.log('Edge deleted successfully.', updatedData);
@@ -462,105 +498,76 @@ export default function SampleGraph() {
       if (algo_running === '0') {
         setCurrentPruneStep(0);
         setIsAutoPruning(false);
-        setIsPruning(false);
       }
+      setIsPruning(false);
+      
+      const newLinks = currentLinks.filter((link) => link.id !== edgeId);
+      const isSourceOrphan = !newLinks.some(
+        (link) => link.source.id == sourceId || link.target.id == sourceId
+      );
+      const isTargetOrphan = !newLinks.some(
+        (link) => link.source.id == targetId || link.target.id == targetId
+      );
+      
+      const sourceNode = currentNodes.find((node) => node.id == (sourceId));
+      const targetNode = currentNodes.find((node) => node.id == (targetId));
+      console.log('Current Nodes', currentNodes);
+      console.log('Source Node:', sourceNode, 'Target Node:', targetNode);
+      
+      
+      // const edgeToFlash = links.find(l => l.source.id === sourceId && l.target.id === targetId);
+      const edgeToFlash = links.find(link => link.id === edgeId);
+      console.log('Edge to flash:', edgeToFlash);
+      console.log('Is Source Orphan:', isSourceOrphan, 'Is Target Orphan:', isTargetOrphan);
+      console.log('Source Node:', sourceNode, 'Target Node:', targetNode);
+      // Flash the edge and nodes if they are orphans
+      
+      if (edgeToFlash) flashEdge(edgeToFlash, 'red', 250);
+      if (isSourceOrphan && sourceNode) flashNode(sourceNode, 'red', 250);
+      if (isTargetOrphan && targetNode) flashNode(targetNode, 'red', 250);
+      await new Promise(resolve => setTimeout(resolve, 250));
+      
+      setLinks(newLinks);
+      setNodes(prevNodes => {
+        let updatedNodes = prevNodes.filter(n => {
+          if (isSourceOrphan && n.id === sourceId) return false;
+          if (isTargetOrphan && n.id === targetId) return false;
+          return true;
+        })
 
-      console.log('Updating Tree State', updatedData.timeline);
+       if(algo_running === '1') {
+          return updatedNodes
+        } else {
+          const newNodesMap = new Map(newNodes.map((node) => [node.id, node]));
+          let nodesChanged = false;
+
+          const mergedNodes = updatedNodes.map(node => {
+            const updatedNode = newNodesMap.get(node.id);
+
+            if (updatedNode && updatedNode.group !== node.group) {
+              console.log('Node group changed:', node.id,'from', node.group,'to', updatedNode.group);
+              nodesChanged = true;
+              const newNode = {...node};
+              newNode.group = updatedNode.group;
+              return newNode;
+            }
+            return node;
+          })
+          return nodesChanged ? mergedNodes : updatedNodes;
+        }
+      });
+
       if (algo_running === '0' || algo_running === '1') {
         await handleModifyTree(updatedData.timeline);
       }
 
-      const edgeId = `${sourceId}-${targetId}`;
-      const newLinks = links.filter((link) => link.id !== edgeId);
-
-      const edgeToFlash = links.find(l => l.source.id === sourceId && l.target.id === targetId);
-      console.log(edgeToFlash)
-      flashEdge(edgeToFlash, 'red', 500);
-
-      const isSourceOrphan = !newLinks.some(
-        (link) => link.source.id === sourceId || link.target.id === sourceId
-      );
-      const isTargetOrphan = !newLinks.some(
-        (link) => link.source.id === targetId || link.target.id === targetId
-      );
-
-      let currentNodes = [...nodes];
-      console.log('newNodes', currentNodes);
-
-      const sourceNode = currentNodes.find((node) => node.id === sourceId);
-      const targetNode = currentNodes.find((node) => node.id === targetId);
-
-      if (isSourceOrphan && sourceNode) {
-        flashNode(sourceNode, 'red', 500);
-        console.log('Removing orphan source node', sourceId);
-        currentNodes = currentNodes.filter((node) => node.id !== sourceId);
-      }
-
-      if (isTargetOrphan && targetNode) {
-        flashNode(targetNode, 'red', 500);
-        console.log('Removing orphan target node', targetId);
-        currentNodes = currentNodes.filter((node) => node.id !== targetId);
-      }
-
-      // Edge removal animation
-      d3.select(`line[data-id="${edgeId}"]`)
-        .interrupt()
-        .transition()
-        .duration(500)
-        .style('stroke', 'red')
-        .style('stroke-width', '3px')
-        .transition()
-        .duration(300)
-        .style('stroke-opacity', 0)
-        .style('stroke-width', '0px')
-        .remove();
-
-      // Update state after animations complete
       setTimeout(() => {
-        setLinks(newLinks);
-
-        if (algo_running === '1') {
-        console.log('Pruning goin on')
-        setNodes(currentNodes);}
-        else {
-          console.log('Manual Delete')
-          setNodes((prevNodes) => {
-            const nodeMap = new Map(prevNodes.map((node) => [node.id, node]));
-            const updatedNodes = [];
-            let nodesChanged = false;
-  
-            for (const newNode of newNodes) {
-              const existingNode = nodeMap.get(newNode.id);
-              if (existingNode.group !== newNode.group) {
-                console.log(
-                  'Node group changed:',
-                  newNode.id,
-                  'from',
-                  existingNode.group,
-                  'to',
-                  newNode.group
-                );
-                nodesChanged = true;
-                existingNode.group = newNode.group;
-                updatedNodes.push(existingNode);
-              }
-              else {
-                updatedNodes.push(existingNode);
-              }
-            }
-  
-            if (prevNodes.length !== newNodes.length) {
-              nodesChanged = true;
-            }
-  
-            return nodesChanged ? updatedNodes : prevNodes;
-          });
-        }
-        setIsPruning(false);
-
         if (simulationRef.current) {
-          simulationRef.current.nodes(newNodes).force('link').links(newLinks);
-          simulationRef.current.alpha(0).restart();
+          simulationRef.current
+            .nodes(nodesRef.current)
+            .force('link')
+            .links(linksRef.current)
+            simulationRef.current.alpha(0.5).restart();  
         }
 
         logEdgeOperation('DELETE_EDGE_COMPLETE', {
@@ -570,7 +577,8 @@ export default function SampleGraph() {
           nodeCount: nodes.length,
           edgeCount: links.length,
         });
-      }, 500);
+      }, 100);
+
     } catch (error) {
       alert(`Error deleting edge: ${error.message}`);
       logEdgeOperation('DELETE_EDGE_ERROR', {
@@ -584,34 +592,37 @@ export default function SampleGraph() {
   //Needs useCallback to prevent re-renders
   useEffect(() => {
     const processActions = async () => {
-      if (!actionSequence?.length || actionProcessingRef.current) return;
-
+      if (actionProcessingRef.current || !actionSequence?.length) return;
+      
       actionProcessingRef.current = true;
-      console.log('Processing action sequence:', actionSequence);
-
       try {
-        const sequenceToProcess = [...actionSequence];
-        for (const { action, source, target } of sequenceToProcess) {
+        for (const { action, source, target } of actionSequence) {
+          const controller = new AbortController();
+          
           try {
             if (parseInt(action) === 1) {
-              await addEdge(source, target, "2");
+              await addEdge(source, target, "2", controller.signal);
             } else if (parseInt(action) === 0) {
-              await deleteEdge(source, target, 2);
+              await deleteEdge(source, target, 2, controller.signal);
             }
-            console.log(`Processed action ${action} on ${source}->${target}`);
+            await clearActionSequence();
           } catch (error) {
-            console.error(`Action ${action} failed:`, error);
+            if (error.name !== 'AbortError') {
+              console.error(`Action failed:`, error);
+              await new Promise(resolve => setTimeout(resolve, 1000));
+              continue; // This will retry the same action
+            }
+          } finally {
+            controller.abort();
           }
-          await new Promise((resolve) => setTimeout(resolve, 500));
+          
+          await new Promise(resolve => setTimeout(resolve, 300));
         }
-
-        await clearActionSequence();
-        console.log('All actions processed successfully');
       } finally {
         actionProcessingRef.current = false;
       }
     };
-
+  
     processActions();
   }, [actionSequence]);
 

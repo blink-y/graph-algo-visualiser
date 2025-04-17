@@ -12,7 +12,7 @@ export function flashEdge(link, color, duration = 1000) {
         edgeElement
             .transition().duration(50)
             .style('stroke', color)
-            .style('stroke-width', '1.5px')
+            .style('stroke-width', '3px')
             .transition().duration(50)
             .style('stroke', 'black')
             .style('stroke-width', '1.5px')
@@ -32,7 +32,7 @@ export function flashNode(node, color, duration = 1000) {
     if (nodeElement.empty()) {
         console.warn('Node is not found in DOM')
         return;
-    }
+    } else {console.log('Node found:', nodeElement);}
 
     const flash = () => {
         nodeElement

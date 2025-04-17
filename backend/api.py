@@ -196,7 +196,7 @@ async def navigate_to_node(node_id: NavigationRequest):
     )
 
 @app.post("/upload_graph", response_model=AlgorithmsResponse)
-async def uploada_graph(edges: EdgeList):
+async def upload_graph(edges: EdgeList):
     """
     Upload a graph and compute its k-core structure.
     """
