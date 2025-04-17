@@ -108,13 +108,6 @@ export default function SampleGraph() {
     // Use functional update to get the most current state
     setCurrentPruneStep((currentStep) => {
       const currentPruneQueue = pruneQueue;
-      //console.log('Current prune queue:', currentPruneQueue);
-      //console.log(
-      //   'Current step:',
-      //   currentStep,
-      //   'Queue length:',
-      //   currentPruneQueue.length
-      // );
 
       if (currentStep >= currentPruneQueue.length) {
         //console.log('All edges pruned');
@@ -136,7 +129,6 @@ export default function SampleGraph() {
       const { source, target } = edgeToRemove;
       // Api Call
       deleteEdge(source.id, target.id, '1');
-
       return currentStep + 1;
     });
   }, [pruneQueue, links, nodes, isPruning]);
@@ -146,7 +138,7 @@ export default function SampleGraph() {
     let intervalId;
 
     if (isAutoPruning) {
-      intervalId = setInterval(pruneNextEdge, 1000);
+      intervalId = setInterval(pruneNextEdge, 500);
     }
 
     return () => {
@@ -209,8 +201,6 @@ export default function SampleGraph() {
       .attr('stroke', '#999')
       .attr('stroke-opacity', 1)
       .selectAll('line')
-      // .data(links, d => `${d.source}-${d.target}`)
-      // .attr('data-id', d =>`${d.source}-${d.target}`)
       .data(links, (d) => d.id)
       .join('line')
       .attr('data-id', d => d.id)
@@ -380,16 +370,16 @@ export default function SampleGraph() {
 
           const existingKeys = new Set(
             prevEdges.map(edge => {
-              const src = typeof edge.source === 'object' ? edge.source.id : edge.source;
-              const tgt = typeof edge.target === 'object' ? edge.target.id : edge.target;
+              const src = typeof edge.source == 'object' ? edge.source.id : edge.source;
+              const tgt = typeof edge.target == 'object' ? edge.target.id : edge.target;
               return [src, tgt].sort().join('-');
             })
           );
         
           // Filter new edges
           const newEdgesToAdd = newEdges.filter(newEdge => {
-            const src = typeof newEdge.source === 'object' ? newEdge.source.id : newEdge.source;
-            const tgt = typeof newEdge.target === 'object' ? newEdge.target.id : newEdge.target;
+            const src = typeof newEdge.source == 'object' ? newEdge.source.id : newEdge.source;
+            const tgt = typeof newEdge.target == 'object' ? newEdge.target.id : newEdge.target;
             return !existingKeys.has([src, tgt].sort().join('-'));
           });
         
@@ -409,13 +399,22 @@ export default function SampleGraph() {
         setIsPruning(false);
 
         if (simulationRef.current) {
-          simulationRef.current.nodes(nodes).force('link').links(links);
-          simulationRef.current.alpha(0.5).restart();
+          // Get fresh references
+          const currentNodes = nodesRef.current;
+          const currentLinks = linksRef.current;
+          
+          // Rebind all forces with current data
+          simulationRef.current
+            .nodes(currentNodes)
+            .force('link', d3.forceLink(currentLinks).id(d => d.id))
+            .force('charge', d3.forceManyBody().strength(-50))
+            .alpha(1) // Reset alpha for strong restart
+            .restart();
         }
 
         console.log('Final edge count after state update:', links.length);
         console.log('Final edges after state update:', links);
-      }, 200);
+      }, 0);
 
       console.log('link after setting:', links);
       if (algo_running === '0' || algo_running === '1') {
@@ -463,6 +462,11 @@ export default function SampleGraph() {
 
       const currentLinks = [...linksRef.current];
       const currentNodes = [...nodesRef.current];
+      console.log('Current Links and Nodes before deletion:', {
+        links: currentLinks,
+        nodes: currentNodes,
+      }
+      )
 
       const edgeIndex = currentLinks.findIndex(link => link.id === edgeId);
       if (edgeIndex === -1) {
@@ -530,8 +534,8 @@ export default function SampleGraph() {
       setLinks(newLinks);
       setNodes(prevNodes => {
         let updatedNodes = prevNodes.filter(n => {
-          if (isSourceOrphan && n.id === sourceId) return false;
-          if (isTargetOrphan && n.id === targetId) return false;
+          if (isSourceOrphan && n.id == sourceId) return false;
+          if (isTargetOrphan && n.id == targetId) return false;
           return true;
         })
 
@@ -563,11 +567,17 @@ export default function SampleGraph() {
 
       setTimeout(() => {
         if (simulationRef.current) {
+          // Get fresh references
+          const currentNodes = nodesRef.current;
+          const currentLinks = linksRef.current;
+          
+          // Rebind all forces with current data
           simulationRef.current
-            .nodes(nodesRef.current)
-            .force('link')
-            .links(linksRef.current)
-            simulationRef.current.alpha(0.5).restart();  
+            .nodes(currentNodes)
+            .force('link', d3.forceLink(currentLinks).id(d => d.id))
+            .force('charge', d3.forceManyBody().strength(-50))
+            .alpha(1) // Reset alpha for strong restart
+            .restart();
         }
 
         logEdgeOperation('DELETE_EDGE_COMPLETE', {
@@ -577,7 +587,7 @@ export default function SampleGraph() {
           nodeCount: nodes.length,
           edgeCount: links.length,
         });
-      }, 100);
+      }, 0);
 
     } catch (error) {
       alert(`Error deleting edge: ${error.message}`);
@@ -610,13 +620,13 @@ export default function SampleGraph() {
             if (error.name !== 'AbortError') {
               console.error(`Action failed:`, error);
               await new Promise(resolve => setTimeout(resolve, 1000));
-              continue; // This will retry the same action
+              continue;
             }
           } finally {
             controller.abort();
           }
           
-          await new Promise(resolve => setTimeout(resolve, 300));
+          await new Promise(resolve => setTimeout(resolve, 500));
         }
       } finally {
         actionProcessingRef.current = false;
