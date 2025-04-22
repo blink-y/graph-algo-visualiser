@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, RootModel
 from typing import Dict, List, Tuple, Union, Optional, Set
 import graph_utils
 from timeline import TimeLine, TimeLineNode, find_node_by_id  # Import TimeLine and TimeLineNode
@@ -60,11 +60,14 @@ class NavigationStep(BaseModel):
 class NavigationResponse(BaseModel):
     action_sequence: List[NavigationStep]
 
-class TrussComponent(BaseModel):
+class PolygonComponent(BaseModel):
     nodes: List[int]
 
-class TrussResponse(BaseModel):
-    polygon_data: Dict[int, List[TrussComponent]]
+class PolygonLevel(RootModel):
+    root: List[PolygonComponent]
+
+class PolygonResponse(BaseModel):
+    polygon_data: Dict[int, PolygonLevel]
 
 @app.post("/initialize_graph", response_model=AlgorithmsResponse)
 async def initialize_graph(value: Value):
@@ -223,7 +226,9 @@ async def upload_graph(edges: EdgeList):
         timeline=TIMELINE.root.to_dict()  # Will show empty root node
     )
 
-@app.get("/polygon", response_model=TrussResponse)
+@app.get("/polygon", response_model=PolygonResponse)
 async def get_truss_data():
-    truss_data = graph_utils.run_all_ktrusses(TIMELINE.graph.edges())
-    return TrussResponse(polygon_data=truss_data)
+    polygon_data = {
+        k: PolygonLevel(root=v) for k, v in graph_utils.run_all_ktrusses(TIMELINE.graph.edges()).items()
+    }
+    return PolygonResponse(polygon_data=polygon_data)
