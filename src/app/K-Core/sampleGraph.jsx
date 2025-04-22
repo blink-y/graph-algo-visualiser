@@ -911,14 +911,14 @@ export default function SampleGraph() {
           onClick={() => setIsAutoPruning((prev) => !prev)}
           className="mr-2 mb-1 text-md"
         >
-          {isAutoPruning ? 'Stop Auto-Pruning' : 'Start Auto-Pruning'}
+          {isAutoPruning ? 'Stop Decomposition' : 'Start Decomposition'}
         </Button>
         <Button onClick={handlePruneClick} disabled={isAutoPruning}>
           Prune Next Edge
         </Button>
-        <div className="ml-2 mt-1.5 text-md font-bold">
+        <Button className="ml-2 text-md font-bold" disabled variant="outline">
           Progress: {currentPruneStep} / {pruneQueue.length} edges pruned
-        </div>
+        </Button>
       </div>
       <div className="flex flex-row h-full w-full">
         {/* Graph Area */}
