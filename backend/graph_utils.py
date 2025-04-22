@@ -165,21 +165,33 @@ def run_all_ktrusses(edges):
     G = nx.Graph(edges)
     polygon_data = defaultdict(list)
     
+    # First get the 1-shell (outermost nodes)
+    core_numbers = nx.core_number(G)
+    outer_nodes = [n for n, core in core_numbers.items() if core == 1]
+    
+    if outer_nodes:
+        # Create connected components of the 1-shell
+        outer_subgraph = G.subgraph(outer_nodes)
+        outer_components = list(nx.connected_components(outer_subgraph))
+        
+        # Add to polygon data (as k=0 to indicate outermost layer)
+        for component in outer_components:
+            if len(component) >= 3:  # Only include meaningful components
+                polygon_data[0].append({"nodes": sorted(component)})
+    
+    # Then process k-trusses as before
     k = 1
     while True:
         try:
-            # Get k-truss (note: k+2 because of nx's definition)
             truss = nx.k_truss(G, k+2)
             if truss.number_of_edges() == 0:
                 break
                 
-            # Get connected components sorted by size (largest first)
             components = sorted(nx.connected_components(truss), 
-                              key=lambda x: -len(x))
+                             key=lambda x: -len(x))
             
-            # Format each component as {"nodes": [...]}
             for component in components:
-                if len(component) >= 3:  # Only include components with ≥3 nodes
+                if len(component) >= 3:
                     polygon_data[k].append({"nodes": sorted(component)})
             
             k += 1
