@@ -28,8 +28,8 @@ export default function Page() {
 
   return (
     <div className="container mx-auto p-1">
-      <div className="mb-4">
-        <h1 className="text-2xl font-bold mb-4 ml-4 justify-self-center">Graph Algorithm Visualizer</h1>
+      <div className="mb-2">
+        <h1 className="text-2xl font-bold mb-2 mt-2 ml-4 justify-self-center">Graph Algorithm Visualizer</h1>
         <div className="flex items-start mt-4">
           <div className="flex flex-col">
             <div className="flex-1 h-full w-full" style={{ border: "2px solid black", padding: "10px" }}>

@@ -216,3 +216,22 @@ body {
 .edge-log-content::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.3);
 }
+
+/* Default state (unclicked) */
+.polygon-toggle {
+  background-color: #0F172A; 
+  color: #F8FAFC; 
+  font-size: 16px;
+  border: 1px solid #0F172A; 
+  transition: none; 
+}
+
+/* Pressed/clicked state */
+.polygon-toggle[data-state="on"] {
+  background-color: #0F172A; 
+  color: #F8FAFC; 
+  font-size: 16px;
+  border-color: #0F172A; 
+  transition: none;
+}
+

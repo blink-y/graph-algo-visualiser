@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import { Toggle } from '@/components/ui/toggle';
 import { useTreeStore, useActionStore } from './store';
 import { processGraphData } from './processGraphData';
 import { flashEdge, flashNode } from './animation';
@@ -54,18 +55,16 @@ export default function SampleGraph() {
   // Logging
   const [edgeLogs, setEdgeLogs] = useState([]);
 
-  // Polygon Data
+  // Polygon
   const [polygonData, setPolygonData] = useState([]);
+  const [showPolygons, setShowPolygons] = useState(false);
 
   // Graph Stabilizer
   const stabilizeGraph = useCallback(() => {
     if (!simulationRef.current) return;
-    
-    simulationRef.current
-      .alphaTarget(0.1)
-      .alpha(0.3)
-      .restart();
-  
+
+    simulationRef.current.alphaTarget(0.1).alpha(0.3).restart();
+
     setTimeout(() => {
       if (simulationRef.current) {
         simulationRef.current.alphaTarget(0);
@@ -119,30 +118,30 @@ export default function SampleGraph() {
       console.log('Already pruning, skipping this step');
       return;
     }
-  
+
     setIsPruning(true);
-  
+
     // Use current state values directly
     const currentStep = currentPruneStep;
     const currentPruneQueue = pruneQueue;
-  
+
     if (currentStep >= currentPruneQueue.length) {
       console.log('All edges pruned');
       setIsAutoPruning(false);
       setIsPruning(false);
       return;
     }
-  
+
     const edgeId = currentPruneQueue[currentStep];
     const edgeToRemove = links.find((link) => link.id === edgeId);
-  
+
     if (!edgeToRemove) {
       console.log('Edge not found in current links:', edgeId);
       setIsPruning(false);
       setCurrentPruneStep(currentStep + 1);
       return;
     }
-  
+
     const { source, target } = edgeToRemove;
     deleteEdge(
       typeof source === 'object' ? source.id : source,
@@ -181,7 +180,9 @@ export default function SampleGraph() {
 
     const color = d3.scaleOrdinal(d3.schemeCategory10);
     const polygonColor = (value) => {
-      const colorScale = d3.scaleSequential(d3.interpolateTurbo).domain([0, 1]);
+      const colorScale = d3
+        .scaleSequential(d3.interpolateRainbow)
+        .domain([0, 10]);
       return colorScale(value);
     };
     d3.select(svgRef.current).selectAll('*').remove();
@@ -195,18 +196,19 @@ export default function SampleGraph() {
             .forceLink()
             .id((d) => d.id)
             .strength((link) => {
-              return link.source.group === link.target.group ? 1  : 0.4;
+              return link.source.group === link.target.group ? 1 : 0.4;
             })
         )
         .force('charge', d3.forceManyBody().strength(-50))
         .force('center', d3.forceCenter(width / 2, height / 2));
     }
 
-    const svg = d3.select(svgRef.current)
-    .attr('width', width)
-    .attr('height', height)
-    .attr('viewBox', [0, 0, width, height])
-    .style('overflow', 'hidden');
+    const svg = d3
+      .select(svgRef.current)
+      .attr('width', width)
+      .attr('height', height)
+      .attr('viewBox', [0, 0, width, height])
+      .style('overflow', 'hidden');
 
     svg.selectAll('*').remove();
 
@@ -228,61 +230,61 @@ export default function SampleGraph() {
       .selectAll('line')
       .data(links, (d) => d.id)
       .join('line')
-      .attr('data-id', d => d.id)
+      .attr('data-id', (d) => d.id)
       .attr('stroke-width', 1.5)
       .attr('x1', (d) => d.source.x)
       .attr('y1', (d) => d.source.y)
       .attr('x2', (d) => d.target.x)
       .attr('y2', (d) => d.target.y);
-    
-    
+
     const node = zoomableGroup
-    .append('g')
-    .attr('stroke', '#fff')
-    .attr('stroke-width', 1.5)
-    .selectAll('circle')
-    .data(nodes)
-    .join('circle')
-    .attr('r', 5)
-    .attr('fill', (d) => color(d.group))
-    .attr('data-id', (d) => d.id)
-    .call(
-      d3
-      .drag()
-      .on('start', dragstarted)
-      .on('drag', dragged)
-      .on('end', dragended)
-    );
-    
+      .append('g')
+      .attr('stroke', '#fff')
+      .attr('stroke-width', 1.5)
+      .selectAll('circle')
+      .data(nodes)
+      .join('circle')
+      .attr('r', 5)
+      .attr('fill', (d) => color(d.group))
+      .attr('data-id', (d) => d.id)
+      .call(
+        d3
+          .drag()
+          .on('start', dragstarted)
+          .on('drag', dragged)
+          .on('end', dragended)
+      );
+
     node.append('title').text((d) => d.id);
-    
+
     // After creating your nodes/links
     createLegend(zoomableGroup, nodes, color);
-    
+
     const currentDensity = calculateDensity();
     setDensity(currentDensity);
     updateDensityVisualization(currentDensity);
 
     const drawPolygons = (polygonData) => {
-      
-      if (!polygonData) return;
-  
+      zoomableGroup.selectAll('.zoomable-polygon').remove();
+
+      if (!showPolygons || !polygonData) return;
+
       for (const [kValue, groups] of Object.entries(polygonData)) {
         groups.forEach((group) => {
           const positions = group.nodes
-            .map(id => nodes.find(n => n.id == id))
+            .map((id) => nodes.find((n) => n.id == id))
             .filter(Boolean)
-            .map(node => [node.x, node.y]);
-          console.log('Positions:', positions);
-  
+            .map((node) => [node.x, node.y]);
+
           if (positions.length > 2) {
             const hull = d3.polygonHull(positions);
             if (hull) {
-              zoomableGroup.append('polygon')
+              zoomableGroup
+                .append('polygon')
                 .attr('class', 'zoomable-polygon')
-                .attr('points', hull.map(p => p.join(',')).join(' '))
-                .attr('fill', polygonColor(kValue/10))
-                .attr('stroke', polygonColor(kValue/10))
+                .attr('points', hull.map((p) => p.join(',')).join(' '))
+                .attr('fill', polygonColor(kValue))
+                .attr('stroke', polygonColor(kValue))
                 .attr('stroke-width', 1.5)
                 .attr('opacity', 0.3);
             }
@@ -290,52 +292,49 @@ export default function SampleGraph() {
         });
       }
     };
-  
+
     // Call this whenever you have polygon data to display
-    if (polygonData) {
+    if (showPolygons && polygonData) {
       zoomableGroup.selectAll('.zoomable-polygon').remove();
       drawPolygons(polygonData);
     }
-    
+
     const simulation = simulationRef.current;
     simulation.nodes(nodes).force('link').links(links);
     simulation.alpha(1).restart();
     simulation.on('tick', () => {
       link
-      .attr('x1', (d) => d.source.x)
-      .attr('y1', (d) => d.source.y)
-      .attr('x2', (d) => d.target.x)
-      .attr('y2', (d) => d.target.y);
-      
+        .attr('x1', (d) => d.source.x)
+        .attr('y1', (d) => d.source.y)
+        .attr('x2', (d) => d.target.x)
+        .attr('y2', (d) => d.target.y);
+
       node.attr('cx', (d) => d.x).attr('cy', (d) => d.y);
 
       // Update polygons on tick
-      if (polygonData) {
-        zoomableGroup.selectAll('.zoomable-polygon').remove();
+      if (showPolygons && polygonData) {
         drawPolygons(polygonData);
       }
     });
-    
-    
+
     function dragstarted(event) {
       if (!event.active) simulation.alphaTarget(0.5).restart();
       event.subject.fx = event.subject.x;
       event.subject.fy = event.subject.y;
     }
-    
+
     function dragged(event) {
       event.subject.fx = event.x;
       event.subject.fy = event.y;
     }
-    
+
     function dragended(event) {
       if (!event.active) simulation.alphaTarget(0);
       event.subject.fx = null;
       event.subject.fy = null;
     }
-    
-  }, [nodes, links, calculateDensity, polygonData]);
-  
+  }, [nodes, links, calculateDensity, polygonData, showPolygons]);
+
   const handlePruneClick = useCallback(
     (e) => {
       e.preventDefault();
@@ -352,7 +351,11 @@ export default function SampleGraph() {
     logEdgeOperation('ADD_EDGE_START', { source, target });
 
     try {
-      const newEdge = { source: source, target: target, algo_running: algo_running };
+      const newEdge = {
+        source: source,
+        target: target,
+        algo_running: algo_running,
+      };
       const response = await fetch('http://localhost:8000/add_edge', {
         method: 'POST',
         credentials: 'include',
@@ -430,35 +433,45 @@ export default function SampleGraph() {
         });
 
         setLinks((prevEdges) => {
-
           console.log('Previous edges in the Graph:', prevEdges);
           console.log('New edges from API:', newEdges);
 
           const existingKeys = new Set(
-            prevEdges.map(edge => {
-              const src = typeof edge.source == 'object' ? edge.source.id : edge.source;
-              const tgt = typeof edge.target == 'object' ? edge.target.id : edge.target;
+            prevEdges.map((edge) => {
+              const src =
+                typeof edge.source == 'object' ? edge.source.id : edge.source;
+              const tgt =
+                typeof edge.target == 'object' ? edge.target.id : edge.target;
               return [src, tgt].sort().join('-');
             })
           );
-        
+
           // Filter new edges
-          const newEdgesToAdd = newEdges.filter(newEdge => {
-            const src = typeof newEdge.source == 'object' ? newEdge.source.id : newEdge.source;
-            const tgt = typeof newEdge.target == 'object' ? newEdge.target.id : newEdge.target;
+          const newEdgesToAdd = newEdges.filter((newEdge) => {
+            const src =
+              typeof newEdge.source == 'object'
+                ? newEdge.source.id
+                : newEdge.source;
+            const tgt =
+              typeof newEdge.target == 'object'
+                ? newEdge.target.id
+                : newEdge.target;
             return !existingKeys.has([src, tgt].sort().join('-'));
           });
-        
+
           // DEBUG: Log what's being added
-          console.log('Adding new edges:', newEdgesToAdd.map(e => e.id));
+          console.log(
+            'Adding new edges:',
+            newEdgesToAdd.map((e) => e.id)
+          );
 
           const updatedEdges = [...prevEdges, ...newEdgesToAdd];
           console.log('Total edges after addition:', updatedEdges.length); // Edge count
           console.log('All edges after addition:', updatedEdges); // All edges
-          
+
           return updatedEdges;
         });
-        
+
         stabilizeGraph();
 
         setPruneQueue(pruneSteps);
@@ -470,7 +483,7 @@ export default function SampleGraph() {
           // Get fresh references
           const currentNodes = nodesRef.current;
           const currentLinks = linksRef.current;
-          
+
           // Rebind all forces with current data
           simulationRef.current
             .nodes(currentNodes)
@@ -484,7 +497,7 @@ export default function SampleGraph() {
                 })
             )
             .force('charge', d3.forceManyBody().strength(-50))
-            .alpha(0.1) 
+            .alpha(0.1)
             .restart();
         }
 
@@ -508,7 +521,6 @@ export default function SampleGraph() {
         nodeCount: nodes.length,
         edgeCount: links.length,
       });
-      
     } catch (error) {
       alert(`Error adding edge: ${error.message}`);
       logEdgeOperation('ADD_EDGE_ERROR', {
@@ -530,30 +542,34 @@ export default function SampleGraph() {
 
   //function for deleting an edge
   const deleteEdge = async (sourceId, targetId, algo_running, signal) => {
-    if(signal?.aborted) throw new Error('Operation cancelled')
-    
-    logEdgeOperation('DELETE_EDGE_START', {source: sourceId,target: targetId,algo_running,});
+    if (signal?.aborted) throw new Error('Operation cancelled');
+
+    logEdgeOperation('DELETE_EDGE_START', {
+      source: sourceId,
+      target: targetId,
+      algo_running,
+    });
 
     try {
-
       const currentLinks = [...linksRef.current];
       const currentNodes = [...nodesRef.current];
       console.log('Current Links and Nodes before deletion:', {
         links: currentLinks,
         nodes: currentNodes,
-      }
-      )
+      });
 
-      const edgeIndex = currentLinks.findIndex(link => 
-        link.id === `${sourceId}-${targetId}` || 
-        link.id === `${targetId}-${sourceId}`);
-      
+      const edgeIndex = currentLinks.findIndex(
+        (link) =>
+          link.id === `${sourceId}-${targetId}` ||
+          link.id === `${targetId}-${sourceId}`
+      );
+
       if (edgeIndex === -1) {
         console.warn('Edge not found for deletion:', edgeId);
         return;
       }
       const edgeId = currentLinks[edgeIndex]?.id;
-      console.log('Edge ID to delete:', edgeId);      
+      console.log('Edge ID to delete:', edgeId);
 
       const response = await fetch('http://localhost:8000/remove_edge', {
         method: 'POST',
@@ -564,7 +580,7 @@ export default function SampleGraph() {
         body: JSON.stringify({
           source: sourceId,
           target: targetId,
-          algo_running
+          algo_running,
         }),
       });
       const updatedData = await response.json();
@@ -585,7 +601,7 @@ export default function SampleGraph() {
         setIsAutoPruning(false);
       }
       setIsPruning(false);
-      
+
       const newLinks = currentLinks.filter((link) => link.id !== edgeId);
       const isSourceOrphan = !newLinks.some(
         (link) => link.source.id == sourceId || link.target.id == sourceId
@@ -593,44 +609,48 @@ export default function SampleGraph() {
       const isTargetOrphan = !newLinks.some(
         (link) => link.source.id == targetId || link.target.id == targetId
       );
-      
-      const sourceNode = currentNodes.find((node) => node.id == (sourceId));
-      const targetNode = currentNodes.find((node) => node.id == (targetId));
+
+      const sourceNode = currentNodes.find((node) => node.id == sourceId);
+      const targetNode = currentNodes.find((node) => node.id == targetId);
       console.log('Current Nodes', currentNodes);
       console.log('Source Node:', sourceNode, 'Target Node:', targetNode);
-      
-      
+
       // const edgeToFlash = links.find(l => l.source.id === sourceId && l.target.id === targetId);
-      const edgeToFlash = links.find(link => link.id === edgeId);
+      const edgeToFlash = links.find((link) => link.id === edgeId);
       console.log('Edge to flash:', edgeToFlash);
-      console.log('Is Source Orphan:', isSourceOrphan, 'Is Target Orphan:', isTargetOrphan);
+      console.log(
+        'Is Source Orphan:',
+        isSourceOrphan,
+        'Is Target Orphan:',
+        isTargetOrphan
+      );
       console.log('Source Node:', sourceNode, 'Target Node:', targetNode);
       // Flash the edge and nodes if they are orphans
-      
+
       if (edgeToFlash) flashEdge(edgeToFlash, 'red', 250);
       if (isSourceOrphan && sourceNode) flashNode(sourceNode, 'red', 250);
       if (isTargetOrphan && targetNode) flashNode(targetNode, 'red', 250);
-      await new Promise(resolve => setTimeout(resolve, 250));
-      
+      await new Promise((resolve) => setTimeout(resolve, 250));
+
       setLinks(newLinks);
-      setNodes(prevNodes => {
-        let updatedNodes = prevNodes.filter(n => {
+      setNodes((prevNodes) => {
+        let updatedNodes = prevNodes.filter((n) => {
           if (isSourceOrphan && n.id == sourceId) return false;
           if (isTargetOrphan && n.id == targetId) return false;
           return true;
-        })
+        });
 
-      //  if(algo_running !== '1') {
-      //     const newNodesMap = new Map(newNodes.map((node) => [node.id, node]));
-      //     updatedNodes = updatedNodes.map(node => {
-      //       const updatedNode = newNodesMap.get(node.id);
-      //       if (updatedNode && updatedNode.group !== node.group) {
-      //         console.log('Node group changed:', node.id,'from', node.group,'to', updatedNode.group);
-      //         return { ...node, group: updatedNode.group };
-      //       }
-      //       return node;
-      //     })
-      //   }
+        //  if(algo_running !== '1') {
+        //     const newNodesMap = new Map(newNodes.map((node) => [node.id, node]));
+        //     updatedNodes = updatedNodes.map(node => {
+        //       const updatedNode = newNodesMap.get(node.id);
+        //       if (updatedNode && updatedNode.group !== node.group) {
+        //         console.log('Node group changed:', node.id,'from', node.group,'to', updatedNode.group);
+        //         return { ...node, group: updatedNode.group };
+        //       }
+        //       return node;
+        //     })
+        //   }
 
         return updatedNodes;
       });
@@ -645,7 +665,7 @@ export default function SampleGraph() {
           // Get fresh references
           const currentNodes = nodesRef.current;
           const currentLinks = linksRef.current;
-          
+
           // Rebind all forces with current data
           simulationRef.current
             .nodes(currentNodes)
@@ -659,7 +679,7 @@ export default function SampleGraph() {
                 })
             )
             .force('charge', d3.forceManyBody().strength(-50))
-            .alpha(0.1) 
+            .alpha(0.1)
             .restart();
         }
 
@@ -671,7 +691,6 @@ export default function SampleGraph() {
           edgeCount: links.length,
         });
       }, 250);
-
     } catch (error) {
       alert(`Error deleting edge: ${error.message}`);
       logEdgeOperation('DELETE_EDGE_ERROR', {
@@ -686,15 +705,15 @@ export default function SampleGraph() {
   useEffect(() => {
     const processActions = async () => {
       if (actionProcessingRef.current || !actionSequence?.length) return;
-      
+
       actionProcessingRef.current = true;
       try {
         for (const { action, source, target } of actionSequence) {
           const controller = new AbortController();
-          
+
           try {
             if (parseInt(action) === 1) {
-              await addEdge(source, target, "2", controller.signal);
+              await addEdge(source, target, '2', controller.signal);
             } else if (parseInt(action) === 0) {
               await deleteEdge(source, target, 2, controller.signal);
             }
@@ -702,20 +721,20 @@ export default function SampleGraph() {
           } catch (error) {
             if (error.name !== 'AbortError') {
               console.error(`Action failed:`, error);
-              await new Promise(resolve => setTimeout(resolve, 1000));
+              await new Promise((resolve) => setTimeout(resolve, 1000));
               continue;
             }
           } finally {
             controller.abort();
           }
-          
-          await new Promise(resolve => setTimeout(resolve, 750));
+
+          await new Promise((resolve) => setTimeout(resolve, 750));
         }
       } finally {
         actionProcessingRef.current = false;
       }
     };
-  
+
     processActions();
   }, [actionSequence]);
 
@@ -785,17 +804,18 @@ export default function SampleGraph() {
       return;
     }
 
-    try{
+    try {
       const text = await file.text();
-      const edges = text.split('\n')
-      .filter(line => line.trim())
-      .map(line => {
-        const [source, target] = line.split(',').map(item => {
-          const num = parseInt(item.trim(), 10);
-          return isNaN(num) ? 0 : num;
+      const edges = text
+        .split('\n')
+        .filter((line) => line.trim())
+        .map((line) => {
+          const [source, target] = line.split(',').map((item) => {
+            const num = parseInt(item.trim(), 10);
+            return isNaN(num) ? 0 : num;
+          });
+          return [source, target];
         });
-        return [source, target];
-      });
 
       console.log('Edges from file:', edges);
       const response = await fetch('http://localhost:8000/upload_graph', {
@@ -820,7 +840,7 @@ export default function SampleGraph() {
       setIsPruning(false);
       setDatasets(data);
       await handleModifyTree(data.timeline);
-      console.log('Processed graph data:', processedData);                      
+      console.log('Processed graph data:', processedData);
     } catch (error) {
       console.error('Error uploading graph:', error);
       alert(`Error uploading graph: ${error.message}`);
@@ -852,16 +872,15 @@ export default function SampleGraph() {
     console.log(`[Edge Operation] ${action}:`, details);
   };
 
-  const handleShowPolygons = () => {
-    console.log('Show Polygons button clicked');
-
-    if(!polygonData.length) {
-      console.log('No polygon data available, fetching...');
-      fetchPolygonData();
-      return;
+  const handleTogglePolygons = (pressed) => {
+    console.log('Toggle Polygons button clicked');
+    setShowPolygons(pressed);
+  
+    if (pressed && (!polygonData || polygonData.length === 0)) {
+      console.log('Fetching polygon data...');
+      fetchPolygonData(); // Remove await since onPressedChange doesn't expect a promise
     }
-    drawPolygons();
-  }
+  };
 
   const fetchPolygonData = async () => {
     try {
@@ -873,71 +892,16 @@ export default function SampleGraph() {
         },
       });
 
-      if (!response.ok) {
-        throw new Error(`Failed to fetch polygon data: ${response.status}`);
-      }
+      if (!response.ok) throw new Error(`Failed to fetch: ${response.status}`);
+
       const data = await response.json();
-      console.log('Polygon data:', data.polygon_data);
       setPolygonData(data.polygon_data);
-      //drawPolygons(data.polygon_data);
+      console.log('Polygon data loaded');
     } catch (error) {
-      console.error('Failed to fetch polygon data:', error);
+      console.error('Fetch error:', error);
+      setShowPolygons(false); // Revert toggle if fetch fails
     }
-  }
-
-  // const drawPolygons = (data) => {
-  //   if (!data) return;
-    
-  //   const svg = d3.select(svgRef.current);
-  //   svg.selectAll('.polygon').remove();
-
-  //   const colorMapping = {
-  //     1: 'rgba(255, 204, 204, 0.5)', // Very light pink
-  //     2: 'rgba(255, 153, 204, 0.5)', // Light pink
-  //     3: 'rgba(255, 102, 204, 0.5)', // Medium pink
-  //     4: 'rgba(255, 51, 204, 0.5)',  // Bright pink
-  //     5: 'rgba(255, 0, 204, 0.5)',   // Vivid pink
-  //     6: 'rgba(204, 0, 204, 0.5)',   // Deep pink
-  //     7: 'rgba(153, 0, 204, 0.5)',   // Violet pink
-  //     8: 'rgba(102, 0, 204, 0.5)',   // Purple pink
-  //     9: 'rgba(51, 0, 204, 0.5)',    // Bluish pink
-  //     10: 'rgba(255, 0, 153, 0.5)',  // Bright rose
-  //     11: 'rgba(255, 51, 102, 0.5)'   // Dark rose
-  //   };
-
-  //   for (const [kValue, groups] of Object.entries(data)) {
-  //     groups.forEach((group, groupIndex) => {
-  //       const finalPositions = group.nodes.map(id => {
-  //         const node = nodes.find(n => n.id == id);
-  //         // console.log('Node:', node);
-  //         // console.log('Node position', {x: node.x, y: node.y});
-  //         return node ? {x: node.x, y: node.y} : null;
-  //       }).filter(Boolean);
-
-  //       if(finalPositions.length > 2) {
-  //         console.log('Final positions:', finalPositions);
-  //         const points = finalPositions.map(nodes => [nodes.x, nodes.y]);
-  //         const hull = d3.polygonHull(points);
-
-  //         if(hull && hull.length >= 3) {
-  //           const pointsString = hull.map(point => `${point[0]},${point[1]}`).join(" ");
-  //           //console.log('Creating polygon with points:', pointsString);
-
-  //           svg.append('polygon')
-  //             .datum(hull)
-  //             .attr("points", pointsString)
-  //             .attr("fill", colorMapping[kValue])
-  //             .attr("stroke", colorMapping[kValue])
-  //             .attr("stroke-width", 1)
-  //             .attr("pointer-events", "none")
-  //             .attr("class", `polygon-group-${kValue}-${groupIndex}`)
-  //             .attr("opacity", 0.8);
-  //         }
-  //       }
-  //   })
-  //   }
-  // }
-
+  };
 
   return (
     <div>
@@ -957,18 +921,17 @@ export default function SampleGraph() {
         </div>
       </div>
       <div className="flex flex-row h-full w-full">
-        
         {/* Graph Area */}
-        <div className="flex-[2] mr-1 min-h-0 min-w-0 relative" style={{ border: '2px solid black' }}>
-          <svg
-            ref={svgRef}
-            className="absolute w-full h-full"
-          />
+        <div
+          className="flex-[2] mr-1 min-h-0 min-w-0 relative"
+          style={{ border: '2px solid black' }}
+        >
+          <svg ref={svgRef} className="absolute w-full h-full" />
         </div>
 
         {/* Sidebar */}
         <div className="flex-[1] ml-1 place-content-center justify-items-start">
-          <div className="flex flex-col mb-4">
+          <div className="flex flex-col mb-4 font-bold">
             <h1 className="font-bold mt-4 text-md">Graph Stats</h1>
             <span> No. of Nodes: {nodes.length}</span>
             <span> No. of Edges: {links.length}</span>
@@ -978,7 +941,7 @@ export default function SampleGraph() {
                 className="gauge-fill"
                 style={{ width: `${density * 100}%` }}
               />
-              <span className="density-text">
+              <span className="density-text" style={{ color: 'black', fontWeight: 'bold' }}>
                 Graph Density: {(density * 100).toFixed(1)}%
               </span>
             </div>
@@ -1065,17 +1028,20 @@ export default function SampleGraph() {
           <div className="flex-1 ">
             <div className="mt-3 mb-2">
               <input
-              type = "file"
-              accept = ".txt, .csv, .json"
-              onChange={handleFileUpload}
-              style={{ display: 'none' }}
-              id='graph-upload'
-              ref={fileInputRef}
+                type="file"
+                accept=".txt, .csv, .json"
+                onChange={handleFileUpload}
+                style={{ display: 'none' }}
+                id="graph-upload"
+                ref={fileInputRef}
               />
               <Label htmlFor="graph-upload" className="ml-1 text-md">
-              <Button onClick={handleFileInputClick} className="mr-2 mb-2 text-md">
-                Upload Graph
-              </Button>
+                <Button
+                  onClick={handleFileInputClick}
+                  className="mr-2 mb-2 text-md"
+                >
+                  Upload Graph
+                </Button>
               </Label>
               <Button onClick={clearSvg} className="mr-2 mb-2 text-md">
                 Clear Graph
@@ -1086,9 +1052,14 @@ export default function SampleGraph() {
               <Button onClick={exportGraphData} className="mr-2 mb-2 text-md">
                 Export Graph Data
               </Button>
-              <Button onClick={handleShowPolygons} className="mr-2 mb-2 text-md">
-                Show Polygons
-              </Button>
+              <Toggle
+                pressed={showPolygons}
+                onPressedChange={handleTogglePolygons}
+                className="polygon-toggle"
+                variant="outline"
+              >
+                {showPolygons ? 'Hide Polygons' : 'Show Polygons'}
+              </Toggle>
             </div>
             <div className="mb-4">
               <h1 className="font-bold mt-4 mb-2 text-lg">Sample Graphs</h1>
