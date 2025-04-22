@@ -133,7 +133,10 @@ export default function SampleGraph() {
     }
 
     const edgeId = currentPruneQueue[currentStep];
-    const edgeToRemove = links.find((link) => link.id === edgeId);
+    const edgeToRemove = links.find(link => 
+      link.id === edgeId || 
+      link.id === edgeId.split('-').reverse().join('-')
+    );
 
     if (!edgeToRemove) {
       console.log('Edge not found in current links:', edgeId);
@@ -563,6 +566,7 @@ export default function SampleGraph() {
           link.id === `${sourceId}-${targetId}` ||
           link.id === `${targetId}-${sourceId}`
       );
+      console.log('Edge Index:', edgeIndex);
 
       if (edgeIndex === -1) {
         console.warn('Edge not found for deletion:', edgeId);
@@ -592,6 +596,7 @@ export default function SampleGraph() {
         pruneSteps,
         datasets,
       } = processGraphData(updatedData);
+      console.log("Edge list after deletion:", newEdges);
 
       setPruneQueue(pruneSteps);
       setDatasets(datasets);
@@ -980,8 +985,7 @@ export default function SampleGraph() {
                   className="mt-2 text-md"
                   disabled={isAutoPruning}
                 >
-                  {' '}
-                  Add Edge{' '}
+                  {'    '}Add Edge{'    '}
                 </Button>
               </div>
             </div>
