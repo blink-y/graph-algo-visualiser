@@ -3,10 +3,6 @@ import * as d3 from 'd3';
 export function flashEdge(link, color, duration = 1000) {
     const edgeElement = d3.select(`line[data-id="${link.id}"]`);
 
-    if (edgeElement.empty()) {
-        console.log('Edge not found:', link.id);
-        return;
-    } else {console.log('Edge found:', edgeElement);}
 
     const flash = () => {
         edgeElement
@@ -28,11 +24,6 @@ export function flashEdge(link, color, duration = 1000) {
 
 export function flashNode(node, color, duration = 1000) {
     const nodeElement = d3.select(`circle[data-id="${node.id}"]`);
-
-    if (nodeElement.empty()) {
-        console.warn('Node is not found in DOM')
-        return;
-    } else {console.log('Node found:', nodeElement);}
 
     const flash = () => {
         nodeElement

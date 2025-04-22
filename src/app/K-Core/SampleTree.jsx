@@ -10,6 +10,7 @@ export default function Tree({ height, width, xOffset = 20, yOffset = 125 }) {
   const gRef = useRef();
   const [hoveredNode, setHoveredNode] = useState(null);
   const [nodePosition, setNodePosition] = useState({ x: 0, y: 0 });
+  const [selectedPath, setSelectedPath] = useState([]);
   const { treeData } = useTreeStore();
   const { setActionSequence, clearActionSequence } = useActionStore();
 
@@ -35,6 +36,10 @@ export default function Tree({ height, width, xOffset = 20, yOffset = 125 }) {
       useActionStore.getState().clearActionSequence([]);
     }
   };
+
+  useEffect(() => {
+    setSelectedPath([]);
+  }, [treeData]);
 
   useEffect(() => {
     if (!treeData) return;
@@ -78,27 +83,48 @@ export default function Tree({ height, width, xOffset = 20, yOffset = 125 }) {
       .append("g")
       .attr("class", "node")
       .attr("transform", d => `translate(${d.y + xOffset},${d.x + yOffset})`);
+    
+    const highlightPath = (node) => {
+      const path = [];
+      let currentNode = node;
+      while (currentNode) {
+        path.push(currentNode.data.id);
+        currentNode = currentNode.parent;
+      }
+      setSelectedPath(path);
+    }
 
     // Add circles with hover effects
     nodes.append("circle")
       .attr("r", 4)
-      .attr("fill", "#fff")
+      .attr("fill", d => {
+        if (selectedPath.includes(d.data.id)) {
+          return d.depth === 0 ? "green" : "blue";
+        }
+        return "#fff";
+      })
       .attr("stroke", "black")
       .attr("stroke-width", 1.5)
       .on("mouseover", function(event, d) {
-        d3.select(this).attr("fill", "orange");
+        if (!selectedPath.includes(d.data.id)) {
+          d3.select(this).attr("fill", "orange");
+        }
         setHoveredNode(d.data);
         setNodePosition({
           x: event.clientX - containerRef.current.getBoundingClientRect().left,
           y: event.clientY - containerRef.current.getBoundingClientRect().top
         });
       })
-      .on("mouseout", function() {
-        d3.select(this).attr("fill", "#fff");
+      .on("mouseout", function(event, d) {
+        if (!selectedPath.includes(d.data.id)) {
+          d3.select(this).attr("fill", "#fff");
+        } else {
+          d3.select(this).attr("fill", d.depth === 0 ? "green" : "blue");
+        }
         setHoveredNode(null);
       })
       .on("click", function(event, d) {
-        d3.select(this).attr("fill", "blue");
+        highlightPath(d);
         navigateToNode(d);
         event.stopPropagation();
       });
@@ -127,7 +153,7 @@ export default function Tree({ height, width, xOffset = 20, yOffset = 125 }) {
     // Reset zoom to initial position
     svg.call(zoom.transform, d3.zoomIdentity);
 
-  }, [treeData, width, height, xOffset, yOffset]);
+  }, [treeData, width, height, xOffset, yOffset, selectedPath]);
 
   return (
     <div ref={containerRef} style={{ position: "relative", width, height, border: "2px solid black" }}>

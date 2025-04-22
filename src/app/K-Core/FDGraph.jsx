@@ -613,7 +613,7 @@ export default function ForceDirectedGraph() {
           }
       }
   }
-
+  
     function dragstarted(event) {
       console.log('Drag started', visualizationState);
       if (!event.active) simulation.alphaTarget(0.3).restart();

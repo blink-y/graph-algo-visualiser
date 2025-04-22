@@ -77,24 +77,24 @@ async def initialize_graph(value: Value):
         with open("graphs/sample_graph2.json", "r") as f:
             edges = json.load(f)
     elif value.value == 3:
-        # edges = [
-        #         *[[i, i+1] for i in range(1, 1000)],
-        #         *[[i, i+2] for i in range(1, 999)],
-        #         *[[i, i+50] for i in range(1, 950)],
-        #         *[[i+j, i+k] for i in [0, 100, 200, 300, 400, 500, 600, 700, 800, 900] 
-        #                     for j in range(10) for k in range(j+1, 10)],
-        #         [50,150], [150,250], [250,350], [350,450], [450,550], [550,650], [650,750], [750,850], [850,950],
-        #         [25,125], [125,225], [225,325], [325,425], [425,525], [525,625], [625,725], [725,825], [825,925],
-        #         *[[999, i] for i in range(1, 101)],
-        #         *[[999, i] for i in range(200, 300) if i%7 == 0],
-        #         *[[999, i] for i in range(400, 500) if i%5 == 0],
-        #         [34, 567], [123, 432], [89, 678], [256, 765], [145, 654], [321, 876], [233, 589], [477, 888],
-        #         [65, 345], [178, 567], [289, 712], [366, 944], [511, 823], [622, 155], [734, 299], [877, 411],
-        #         *[[i, i+100] for i in range(1, 900) if i%20 == 0],
-        #         *[[i, i+33] for i in range(50, 950) if i%15 == 0],
-        #         *[[i, i+66] for i in range(25, 975) if i%25 == 0]
-        #         ]
-        edges = [[1,2], [2,3], [3,4], [3,5], [4,5]]
+        edges = [
+                *[[i, i+1] for i in range(1, 1000)],
+                *[[i, i+2] for i in range(1, 999)],
+                *[[i, i+50] for i in range(1, 950)],
+                *[[i+j, i+k] for i in [0, 100, 200, 300, 400, 500, 600, 700, 800, 900] 
+                            for j in range(10) for k in range(j+1, 10)],
+                [50,150], [150,250], [250,350], [350,450], [450,550], [550,650], [650,750], [750,850], [850,950],
+                [25,125], [125,225], [225,325], [325,425], [425,525], [525,625], [625,725], [725,825], [825,925],
+                *[[999, i] for i in range(1, 101)],
+                *[[999, i] for i in range(200, 300) if i%7 == 0],
+                *[[999, i] for i in range(400, 500) if i%5 == 0],
+                [34, 567], [123, 432], [89, 678], [256, 765], [145, 654], [321, 876], [233, 589], [477, 888],
+                [65, 345], [178, 567], [289, 712], [366, 944], [511, 823], [622, 155], [734, 299], [877, 411],
+                *[[i, i+100] for i in range(1, 900) if i%20 == 0],
+                *[[i, i+33] for i in range(50, 950) if i%15 == 0],
+                *[[i, i+66] for i in range(25, 975) if i%25 == 0]
+                ]
+        #edges = [[1,2], [2,3], [3,4], [3,5], [4,5]]
     else:
         raise HTTPException(status_code=400, detail="Invalid value. Please use 1, 2, or 3.")
     
@@ -215,7 +215,7 @@ async def upload_graph(edges: EdgeList):
         TIMELINE.graph.add_edge(u, v)
     
     # Compute core data
-    global_core_data = graph_utils.run_all_kcores(edges)
+    global_core_data = graph_utils.run_all_kcores(edges.edges)
     
     # Return response with empty timeline (root has no children)
     return AlgorithmsResponse(

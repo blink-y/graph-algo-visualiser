@@ -54,6 +54,25 @@ export default function SampleGraph() {
   // Logging
   const [edgeLogs, setEdgeLogs] = useState([]);
 
+  // Polygon Data
+  const [polygonData, setPolygonData] = useState([]);
+
+  // Graph Stabilizer
+  const stabilizeGraph = useCallback(() => {
+    if (!simulationRef.current) return;
+    
+    simulationRef.current
+      .alphaTarget(0.1)
+      .alpha(0.3)
+      .restart();
+  
+    setTimeout(() => {
+      if (simulationRef.current) {
+        simulationRef.current.alphaTarget(0);
+      }
+    }, 200);
+  }, []);
+
   const handleModifyTree = async (data) => {
     setTreeData(data);
   };
@@ -97,48 +116,50 @@ export default function SampleGraph() {
 
   const pruneNextEdge = useCallback(() => {
     if (isPruning) {
-      //console.log('Already pruning, skipping this step');
+      console.log('Already pruning, skipping this step');
       return;
     }
-
+  
     setIsPruning(true);
-
-    //console.log('--- Prune Start ---');
-
-    // Use functional update to get the most current state
-    setCurrentPruneStep((currentStep) => {
-      const currentPruneQueue = pruneQueue;
-
-      if (currentStep >= currentPruneQueue.length) {
-        //console.log('All edges pruned');
-        alert('All edges pruned');
-        setIsAutoPruning(false);
-        setIsPruning(false);
-        return currentStep;
-      }
-
-      let edgeId = currentPruneQueue[currentStep];
-      let edgeToRemove = links.find((link) => link.id === edgeId);
-
-      if (!edgeToRemove) {
-        //console.log('Edge not found in current links:', edgeId);
-        setIsPruning(false);
-        return currentStep + 1;
-      }
-
-      const { source, target } = edgeToRemove;
-      // Api Call
-      deleteEdge(source.id, target.id, '1');
-      return currentStep + 1;
+  
+    // Use current state values directly
+    const currentStep = currentPruneStep;
+    const currentPruneQueue = pruneQueue;
+  
+    if (currentStep >= currentPruneQueue.length) {
+      console.log('All edges pruned');
+      setIsAutoPruning(false);
+      setIsPruning(false);
+      return;
+    }
+  
+    const edgeId = currentPruneQueue[currentStep];
+    const edgeToRemove = links.find((link) => link.id === edgeId);
+  
+    if (!edgeToRemove) {
+      console.log('Edge not found in current links:', edgeId);
+      setIsPruning(false);
+      setCurrentPruneStep(currentStep + 1);
+      return;
+    }
+  
+    const { source, target } = edgeToRemove;
+    deleteEdge(
+      typeof source === 'object' ? source.id : source,
+      typeof target === 'object' ? target.id : target,
+      '1'
+    ).finally(() => {
+      setCurrentPruneStep(currentStep + 1);
+      setIsPruning(false);
     });
-  }, [pruneQueue, links, nodes, isPruning]);
+  }, [pruneQueue, links, isPruning, currentPruneStep]);
 
   // Auto-prune effect
   useEffect(() => {
     let intervalId;
 
     if (isAutoPruning) {
-      intervalId = setInterval(pruneNextEdge, 500);
+      intervalId = setInterval(pruneNextEdge, 750);
     }
 
     return () => {
@@ -152,13 +173,17 @@ export default function SampleGraph() {
     return (2 * links.length) / (n * (n - 1));
   }, [nodes, links]);
 
-  // Effect to render the graph when Nodes or Links change
+  // render the graph when Nodes or Links change
   useEffect(() => {
     if (nodes.length === 0 || !svgRef.current) return;
     const width = window.innerWidth;
     const height = window.innerHeight;
 
     const color = d3.scaleOrdinal(d3.schemeCategory10);
+    const polygonColor = (value) => {
+      const colorScale = d3.scaleSequential(d3.interpolateTurbo).domain([0, 1]);
+      return colorScale(value);
+    };
     d3.select(svgRef.current).selectAll('*').remove();
 
     if (!simulationRef.current) {
@@ -170,7 +195,7 @@ export default function SampleGraph() {
             .forceLink()
             .id((d) => d.id)
             .strength((link) => {
-              return link.source.group === link.target.group ? 1 : 0.4;
+              return link.source.group === link.target.group ? 1  : 0.4;
             })
         )
         .force('charge', d3.forceManyBody().strength(-50))
@@ -237,6 +262,40 @@ export default function SampleGraph() {
     const currentDensity = calculateDensity();
     setDensity(currentDensity);
     updateDensityVisualization(currentDensity);
+
+    const drawPolygons = (polygonData) => {
+      
+      if (!polygonData) return;
+  
+      for (const [kValue, groups] of Object.entries(polygonData)) {
+        groups.forEach((group) => {
+          const positions = group.nodes
+            .map(id => nodes.find(n => n.id == id))
+            .filter(Boolean)
+            .map(node => [node.x, node.y]);
+          console.log('Positions:', positions);
+  
+          if (positions.length > 2) {
+            const hull = d3.polygonHull(positions);
+            if (hull) {
+              zoomableGroup.append('polygon')
+                .attr('class', 'zoomable-polygon')
+                .attr('points', hull.map(p => p.join(',')).join(' '))
+                .attr('fill', polygonColor(kValue/10))
+                .attr('stroke', polygonColor(kValue/10))
+                .attr('stroke-width', 1.5)
+                .attr('opacity', 0.3);
+            }
+          }
+        });
+      }
+    };
+  
+    // Call this whenever you have polygon data to display
+    if (polygonData) {
+      zoomableGroup.selectAll('.zoomable-polygon').remove();
+      drawPolygons(polygonData);
+    }
     
     const simulation = simulationRef.current;
     simulation.nodes(nodes).force('link').links(links);
@@ -249,10 +308,17 @@ export default function SampleGraph() {
       .attr('y2', (d) => d.target.y);
       
       node.attr('cx', (d) => d.x).attr('cy', (d) => d.y);
+
+      // Update polygons on tick
+      if (polygonData) {
+        zoomableGroup.selectAll('.zoomable-polygon').remove();
+        drawPolygons(polygonData);
+      }
     });
     
+    
     function dragstarted(event) {
-      if (!event.active) simulation.alphaTarget(0.3).restart();
+      if (!event.active) simulation.alphaTarget(0.5).restart();
       event.subject.fx = event.subject.x;
       event.subject.fy = event.subject.y;
     }
@@ -268,7 +334,7 @@ export default function SampleGraph() {
       event.subject.fy = null;
     }
     
-  }, [nodes, links, calculateDensity]);
+  }, [nodes, links, calculateDensity, polygonData]);
   
   const handlePruneClick = useCallback(
     (e) => {
@@ -315,8 +381,8 @@ export default function SampleGraph() {
 
       const animateNodes = () => {
         return new Promise((resolve) => {
-          flashNode({ id: source }, 'white', 500);
-          flashNode({ id: target }, 'white', 500);
+          flashNode({ id: source }, 'white', 250);
+          flashNode({ id: target }, 'white', 250);
 
           setTimeout(resolve, 500);
         });
@@ -392,6 +458,8 @@ export default function SampleGraph() {
           
           return updatedEdges;
         });
+        
+        stabilizeGraph();
 
         setPruneQueue(pruneSteps);
         setCurrentPruneStep(0);
@@ -406,15 +474,23 @@ export default function SampleGraph() {
           // Rebind all forces with current data
           simulationRef.current
             .nodes(currentNodes)
-            .force('link', d3.forceLink(currentLinks).id(d => d.id))
+            .force(
+              'link',
+              d3
+                .forceLink(currentLinks)
+                .id((d) => d.id)
+                .strength((link) => {
+                  return link.source.group === link.target.group ? 1 : 0.4;
+                })
+            )
             .force('charge', d3.forceManyBody().strength(-50))
-            .alpha(1) // Reset alpha for strong restart
+            .alpha(0.1) 
             .restart();
         }
 
         console.log('Final edge count after state update:', links.length);
         console.log('Final edges after state update:', links);
-      }, 0);
+      }, 250);
 
       console.log('link after setting:', links);
       if (algo_running === '0' || algo_running === '1') {
@@ -432,6 +508,7 @@ export default function SampleGraph() {
         nodeCount: nodes.length,
         edgeCount: links.length,
       });
+      
     } catch (error) {
       alert(`Error adding edge: ${error.message}`);
       logEdgeOperation('ADD_EDGE_ERROR', {
@@ -455,7 +532,6 @@ export default function SampleGraph() {
   const deleteEdge = async (sourceId, targetId, algo_running, signal) => {
     if(signal?.aborted) throw new Error('Operation cancelled')
     
-    const edgeId = `${sourceId}-${targetId}`;
     logEdgeOperation('DELETE_EDGE_START', {source: sourceId,target: targetId,algo_running,});
 
     try {
@@ -468,11 +544,16 @@ export default function SampleGraph() {
       }
       )
 
-      const edgeIndex = currentLinks.findIndex(link => link.id === edgeId);
+      const edgeIndex = currentLinks.findIndex(link => 
+        link.id === `${sourceId}-${targetId}` || 
+        link.id === `${targetId}-${sourceId}`);
+      
       if (edgeIndex === -1) {
         console.warn('Edge not found for deletion:', edgeId);
         return;
       }
+      const edgeId = currentLinks[edgeIndex]?.id;
+      console.log('Edge ID to delete:', edgeId);      
 
       const response = await fetch('http://localhost:8000/remove_edge', {
         method: 'POST',
@@ -539,27 +620,21 @@ export default function SampleGraph() {
           return true;
         })
 
-       if(algo_running === '1') {
-          return updatedNodes
-        } else {
-          const newNodesMap = new Map(newNodes.map((node) => [node.id, node]));
-          let nodesChanged = false;
+      //  if(algo_running !== '1') {
+      //     const newNodesMap = new Map(newNodes.map((node) => [node.id, node]));
+      //     updatedNodes = updatedNodes.map(node => {
+      //       const updatedNode = newNodesMap.get(node.id);
+      //       if (updatedNode && updatedNode.group !== node.group) {
+      //         console.log('Node group changed:', node.id,'from', node.group,'to', updatedNode.group);
+      //         return { ...node, group: updatedNode.group };
+      //       }
+      //       return node;
+      //     })
+      //   }
 
-          const mergedNodes = updatedNodes.map(node => {
-            const updatedNode = newNodesMap.get(node.id);
-
-            if (updatedNode && updatedNode.group !== node.group) {
-              console.log('Node group changed:', node.id,'from', node.group,'to', updatedNode.group);
-              nodesChanged = true;
-              const newNode = {...node};
-              newNode.group = updatedNode.group;
-              return newNode;
-            }
-            return node;
-          })
-          return nodesChanged ? mergedNodes : updatedNodes;
-        }
+        return updatedNodes;
       });
+      stabilizeGraph();
 
       if (algo_running === '0' || algo_running === '1') {
         await handleModifyTree(updatedData.timeline);
@@ -574,9 +649,17 @@ export default function SampleGraph() {
           // Rebind all forces with current data
           simulationRef.current
             .nodes(currentNodes)
-            .force('link', d3.forceLink(currentLinks).id(d => d.id))
+            .force(
+              'link',
+              d3
+                .forceLink(currentLinks)
+                .id((d) => d.id)
+                .strength((link) => {
+                  return link.source.group === link.target.group ? 1 : 0.4;
+                })
+            )
             .force('charge', d3.forceManyBody().strength(-50))
-            .alpha(1) // Reset alpha for strong restart
+            .alpha(0.1) 
             .restart();
         }
 
@@ -587,7 +670,7 @@ export default function SampleGraph() {
           nodeCount: nodes.length,
           edgeCount: links.length,
         });
-      }, 0);
+      }, 250);
 
     } catch (error) {
       alert(`Error deleting edge: ${error.message}`);
@@ -626,7 +709,7 @@ export default function SampleGraph() {
             controller.abort();
           }
           
-          await new Promise(resolve => setTimeout(resolve, 500));
+          await new Promise(resolve => setTimeout(resolve, 750));
         }
       } finally {
         actionProcessingRef.current = false;
@@ -635,12 +718,6 @@ export default function SampleGraph() {
   
     processActions();
   }, [actionSequence]);
-
-  //for handling the "Upload Graph" button click
-  const handleButtonClick = () => {
-    console.log('Upload Graph button clicked');
-    // TODO: Implement logic to trigger file upload
-  };
 
   //for clearing the graph
   const clearSvg = () => {
@@ -701,13 +778,57 @@ export default function SampleGraph() {
     }
   };
 
-  // Placeholder function for handling file upload
-  const handleFileUpload = (event) => {
+  const handleFileUpload = async (event) => {
     const file = event.target.files[0];
-    if (file) {
-      console.log('File uploaded:', file.name);
-      // TODO: Implement logic to process the uploaded file
+    if (!file) {
+      console.error('No file selected');
+      return;
     }
+
+    try{
+      const text = await file.text();
+      const edges = text.split('\n')
+      .filter(line => line.trim())
+      .map(line => {
+        const [source, target] = line.split(',').map(item => {
+          const num = parseInt(item.trim(), 10);
+          return isNaN(num) ? 0 : num;
+        });
+        return [source, target];
+      });
+
+      console.log('Edges from file:', edges);
+      const response = await fetch('http://localhost:8000/upload_graph', {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ edges }),
+      });
+      if (!response.ok) {
+        throw new Error(`Failed to upload graph: ${response.status}`);
+      }
+      const data = await response.json();
+      console.log('Graph uploaded successfully:', data);
+      const processedData = processGraphData(data);
+      setNodes(processedData.nodes);
+      setLinks(processedData.edges);
+      setPruneQueue(processedData.pruneSteps);
+      setCurrentPruneStep(0);
+      setIsAutoPruning(false);
+      setIsPruning(false);
+      setDatasets(data);
+      await handleModifyTree(data.timeline);
+      console.log('Processed graph data:', processedData);                      
+    } catch (error) {
+      console.error('Error uploading graph:', error);
+      alert(`Error uploading graph: ${error.message}`);
+    }
+  };
+
+  const handleFileInputClick = () => {
+    fileInputRef.current.click();
   };
 
   // Placeholder function for handling ToggleGroup value change
@@ -731,6 +852,93 @@ export default function SampleGraph() {
     console.log(`[Edge Operation] ${action}:`, details);
   };
 
+  const handleShowPolygons = () => {
+    console.log('Show Polygons button clicked');
+
+    if(!polygonData.length) {
+      console.log('No polygon data available, fetching...');
+      fetchPolygonData();
+      return;
+    }
+    drawPolygons();
+  }
+
+  const fetchPolygonData = async () => {
+    try {
+      const response = await fetch('http://localhost:8000/polygon', {
+        method: 'GET',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch polygon data: ${response.status}`);
+      }
+      const data = await response.json();
+      console.log('Polygon data:', data.polygon_data);
+      setPolygonData(data.polygon_data);
+      //drawPolygons(data.polygon_data);
+    } catch (error) {
+      console.error('Failed to fetch polygon data:', error);
+    }
+  }
+
+  // const drawPolygons = (data) => {
+  //   if (!data) return;
+    
+  //   const svg = d3.select(svgRef.current);
+  //   svg.selectAll('.polygon').remove();
+
+  //   const colorMapping = {
+  //     1: 'rgba(255, 204, 204, 0.5)', // Very light pink
+  //     2: 'rgba(255, 153, 204, 0.5)', // Light pink
+  //     3: 'rgba(255, 102, 204, 0.5)', // Medium pink
+  //     4: 'rgba(255, 51, 204, 0.5)',  // Bright pink
+  //     5: 'rgba(255, 0, 204, 0.5)',   // Vivid pink
+  //     6: 'rgba(204, 0, 204, 0.5)',   // Deep pink
+  //     7: 'rgba(153, 0, 204, 0.5)',   // Violet pink
+  //     8: 'rgba(102, 0, 204, 0.5)',   // Purple pink
+  //     9: 'rgba(51, 0, 204, 0.5)',    // Bluish pink
+  //     10: 'rgba(255, 0, 153, 0.5)',  // Bright rose
+  //     11: 'rgba(255, 51, 102, 0.5)'   // Dark rose
+  //   };
+
+  //   for (const [kValue, groups] of Object.entries(data)) {
+  //     groups.forEach((group, groupIndex) => {
+  //       const finalPositions = group.nodes.map(id => {
+  //         const node = nodes.find(n => n.id == id);
+  //         // console.log('Node:', node);
+  //         // console.log('Node position', {x: node.x, y: node.y});
+  //         return node ? {x: node.x, y: node.y} : null;
+  //       }).filter(Boolean);
+
+  //       if(finalPositions.length > 2) {
+  //         console.log('Final positions:', finalPositions);
+  //         const points = finalPositions.map(nodes => [nodes.x, nodes.y]);
+  //         const hull = d3.polygonHull(points);
+
+  //         if(hull && hull.length >= 3) {
+  //           const pointsString = hull.map(point => `${point[0]},${point[1]}`).join(" ");
+  //           //console.log('Creating polygon with points:', pointsString);
+
+  //           svg.append('polygon')
+  //             .datum(hull)
+  //             .attr("points", pointsString)
+  //             .attr("fill", colorMapping[kValue])
+  //             .attr("stroke", colorMapping[kValue])
+  //             .attr("stroke-width", 1)
+  //             .attr("pointer-events", "none")
+  //             .attr("class", `polygon-group-${kValue}-${groupIndex}`)
+  //             .attr("opacity", 0.8);
+  //         }
+  //       }
+  //   })
+  //   }
+  // }
+
+
   return (
     <div>
       {/* Top Bar */}
@@ -739,7 +947,7 @@ export default function SampleGraph() {
           onClick={() => setIsAutoPruning((prev) => !prev)}
           className="mr-2 mb-1 text-md"
         >
-          {isAutoPruning ? 'Stop Auto-Update' : 'Start Auto-Update'}
+          {isAutoPruning ? 'Stop Auto-Pruning' : 'Start Auto-Pruning'}
         </Button>
         <Button onClick={handlePruneClick} disabled={isAutoPruning}>
           Prune Next Edge
@@ -856,9 +1064,19 @@ export default function SampleGraph() {
           </div>
           <div className="flex-1 ">
             <div className="mt-3 mb-2">
-              <Button onClick={handleButtonClick} className="mr-2 mb-2 text-md">
+              <input
+              type = "file"
+              accept = ".txt, .csv, .json"
+              onChange={handleFileUpload}
+              style={{ display: 'none' }}
+              id='graph-upload'
+              ref={fileInputRef}
+              />
+              <Label htmlFor="graph-upload" className="ml-1 text-md">
+              <Button onClick={handleFileInputClick} className="mr-2 mb-2 text-md">
                 Upload Graph
               </Button>
+              </Label>
               <Button onClick={clearSvg} className="mr-2 mb-2 text-md">
                 Clear Graph
               </Button>
@@ -868,13 +1086,9 @@ export default function SampleGraph() {
               <Button onClick={exportGraphData} className="mr-2 mb-2 text-md">
                 Export Graph Data
               </Button>
-              <input
-                type="file"
-                accept=".txt" // or the appropriate file types
-                onChange={handleFileUpload}
-                ref={fileInputRef}
-                style={{ display: 'none' }} // Hide the file input
-              />
+              <Button onClick={handleShowPolygons} className="mr-2 mb-2 text-md">
+                Show Polygons
+              </Button>
             </div>
             <div className="mb-4">
               <h1 className="font-bold mt-4 mb-2 text-lg">Sample Graphs</h1>
